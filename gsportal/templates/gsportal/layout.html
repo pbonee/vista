@@ -1,0 +1,172 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Vista</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
+  <script type="text/javascript" src="{% static 'gsportal/gsportal.js' %}"></script>
+  <link rel="shortcut icon" href="{% static 'gsportal/favicon.ico' %}">
+
+  <script src="https://cdn.jsdelivr.net/gh/emn178/chartjs-plugin-labels/src/chartjs-plugin-labels.js"></script>
+
+
+  <style>
+
+      .btn:focus {
+        outline: none;
+        box-shadow: none;
+        border: none;
+      }
+      .bi {
+        margin-top:0;
+      }
+      form.hide-submit input[type="submit"] {
+        display: none;
+      }
+      .cellIcon {
+        text-align:center;
+      }
+      .alertCells {
+        padding-left: 5px;
+        padding-right: 5px;
+      }
+      .alertCells input {
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .alertCells select {
+        width: 100%;
+        box-sizing: border-box;
+      }
+      label, input {
+          display: block;
+      }
+      span.helptext {
+          display: none;
+      }
+      .showGreen {
+        background-color: LightGreen;
+        transition: background-color 1s;
+      }
+      .showRed {
+        background-color: Tomato;
+        transition: background-color 1s;
+      }
+      .stdbgGreen {
+        background-color: #f3fff3;
+        transition: background-color 1s;
+      }
+      .stdbgBlue {
+        background-color: #e6f7ff;
+        transition: background-color 1s;
+      }
+      .stdbgRed {
+        background-color: #fff2e6;
+        transition: background-color 1s;
+      }
+      .marquee {
+
+        overflow: hidden;
+        box-sizing: border-box;
+        height:14.0em;
+        font-size:0.9em
+      }
+      .msg {
+        height: 4.5em;
+        width: 300px;
+        padding:20px;
+        padding-left: 0;
+
+        word-break: break-word;
+        animation: marquee 10s linear infinite;
+
+      }
+      @keyframes marquee {
+        0% {
+          transform: translate(0, 0);
+        }
+        100% {
+          transform: translate(0, -400%);
+        }
+      }
+
+
+
+  </style>
+</head>
+<body>
+
+  <nav class="navbar navbar-expand-sm bg-primary navbar-dark fixed-top">
+    <img class="navbar-brand mr-2" src="{% static 'gsportal/blocks3.jpg' %}" height=50px width=40px>
+    <a class="navbar-brand" href="{% url 'dash' %}">Vista</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#collapsibleNavbar">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="collapsibleNavbar">
+      <ul class="navbar-nav">
+
+        {% if user.is_authenticated %}
+          <li class="nav-item">
+            <a class="nav-link" id="navDash" href="{% url 'dash' %}">Dashboard</a>
+          </li>
+
+          <li class="nav-item">
+            <a class="nav-link" id="navAcct" href="{% url 'accounts' %}">Accounts</a>
+          </li>
+
+          <li class="nav-item">
+            <a class="nav-link" id="navPort" href="{% url 'portfolio' %}">Portfolio</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="navAlerts" href="{% url 'alerts' %}">Alerts</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" id="navSettings" href="{% url 'settings' %}">Settings</a>
+          </li>
+
+
+
+            <li class="nav-item" >
+              <a class="nav-link" href="{% url 'logout' %}"> Logout</a>
+            </li>
+
+        {% else %}
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'login' %}">Login</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'register' %}">Register</a>
+        </li>
+        {% endif %}
+
+
+      </ul>
+    </div>
+    <div class="justify-content-end pt-1" >
+      <p id="timefield" style="white-space: nowrap; text-align: right; margin: 0;font-size: 0.8em; color:white">
+
+      </p>
+      <p  style="white-space: nowrap; text-align: right; margin: 0; font-size: 0.8em; color:white">
+        mkt: <span id="marketfield"></span>
+      </p>
+    </div>
+  </nav>
+
+
+
+  {% block body %}
+  {% endblock %}
+
+  <div class="jumbotron text-center p-1 small" style="margin-bottom:0">
+    <p class="mt-1">© 2020 Pete Bonee </p>
+  </div>
+
+</body>
+
+</html>

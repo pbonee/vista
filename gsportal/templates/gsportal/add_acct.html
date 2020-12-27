@@ -1,0 +1,15 @@
+{% extends 'gsportal/layout.html' %}
+
+{% block body %}
+<div class="container" style="margin-top:80px">
+
+<h5>Enter information for the new account:</h2><hr>
+<form action="{% url 'add_acct' %}" method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button name="submit" value="submit" type="submit" class="btn btn-primary">Submit</button>
+  <button name="submit" value="cancel" type="submit" formnovalidate class="btn btn-default">Cancel</button>
+</form>
+<hr>
+</div>
+{% endblock %}

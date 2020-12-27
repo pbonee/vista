@@ -1,0 +1,145 @@
+{% extends 'gsportal/layout.html' %}
+
+{% block body %}
+
+<!-- Modal -->
+<div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="exampleModalLabel">Alerts</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+
+      <div class="modal-body" id="modalAlertTemplate" style="display: none">
+        <div style="float:left">
+          <p></p>
+        </div>
+        <div style="float:right">
+          <label style="cursor:pointer">
+            <input type="button" name="button" value="delete" id="modalAlertDelete" style="display: none"></input>
+          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-trash" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+            <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4L4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+          </svg>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-body" id="modalDefaultMessage" style="display: inline-block">
+        <div style="float:left">
+          <p>There are no alerts</p>
+        </div>
+        <div style="float:right; display:none " >
+          <label style="cursor:pointer">
+            <input type="button" name="button" value="delete" id="modalDefaultAlertDelete"  style="display: none"></input>
+          <svg width="1em" height="1em" viewBox="0 0 16 16" class="bi bi-trash" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+            <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4L4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+          </svg>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="container" style="margin-top:80px">
+  <div class="row">
+    <div class="col-sm-8">
+      <div class="border border-primary pb-0 pl-2 pt-2">
+        <h5 class="text-primary">
+          Markets<span id="pvalue"></span>
+        </h5>
+        <hr>
+
+
+        <div class="row">
+          <div class="col pr-3 pb-2 mb-3">
+            <div class="text-left small">Dow Jones</div>
+            <div class="text-left small"> <span id="dcurrent"></span>&nbsp; &nbsp;<span style="color:green" id="dchange"></span></div>
+            <div id="dowjones" style="width:170px; height:130px"><canvas class="my-4 chartjs-render-monitor" id="dowChart"></canvas></div>
+          </div>
+
+          <div class="col pr-3 pb-2">
+            <div class="text-left small">NASDAQ</div>
+            <div class="text-left small"> <span id="ncurrent"></span>&nbsp; &nbsp;<span style="color:green" id="nchange"></span></div>
+            <div id="nasdaq" style="width:170px; height:130px"><canvas class="my-4 chartjs-render-monitor" id="nasdaqChart"></canvas></div>
+          </div>
+
+          <div class="col pr-3 pb-2">
+            <div class="text-left small">S&P 500</div>
+            <div class="text-left small"> <span id="scurrent"></span>&nbsp; &nbsp;<span style="color:red" id="schange"></span></div>
+            <div id="sandp" style="width:170px; height:130px"><canvas class="my-4 chartjs-render-monitor" id="sandpChart"></canvas></div>
+          </div>
+        </div>
+
+
+
+      </div>
+    </div>
+    <div class="col-sm-4 pt-2 pr-0 border border-primary">
+      <div class="w-100">
+
+        <div style="display:inline-block">
+          <h5 class="text-primary">
+          News & Alerts<span id="pvalue"></span>
+          </h5>
+        </div>
+        <div class="float-right pr-2" style="display:inline-block ">
+          <button  id="alertsButton" data-toggle="modal" data-target="#exampleModal" type="badge" style="border:none; background-color:#33adff" class="btn badge badge-primary">
+            alerts <span id="alertsBadge" class="badge badge-light">0</span>
+            <span class="sr-only">unread messages</span>
+          </button>
+        </div>
+      </div>
+    <hr style="margin-bottom: 20px;">
+      <div class="marquee">
+    <div id="keydiv0" class="msg"><a id="msg0"></a>
+      <hr>
+    </div>
+    <div id="keydiv1" class="msg"><a id="msg1"></a>
+      <hr>
+    </div>
+    <div id="keydiv2" class="msg"><a id="msg2"></a>
+      <hr>
+    </div>
+    <div id="keydiv3" class="msg"><a id="msg3"></a>
+      <hr>
+    </div>
+
+    <div class="msg"><a id="msg4"></a>
+      <hr>
+    </div>
+    <div class="msg"><a id="msg5"></a>
+      <hr>
+    </div>
+    <div class="msg"><a id="msg6"></a>
+      <hr>
+    </div>
+    <div class="msg"><a id="msg7"></a>
+      <hr>
+    </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container" style="margin-top:10px"><h5 class="text-primary">
+  My Portfolio<span id="pvalue"></span>
+</h5>
+  <div class="col-md-12 p-0">
+    <div id ="table_container" class="border border-light">
+
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}

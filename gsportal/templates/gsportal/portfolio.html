@@ -1,0 +1,74 @@
+{% extends 'gsportal/layout.html' %}
+
+{% block body %}
+
+<div class="container table-responsive" style="margin-top:80px; margin-bottom:10px">
+  <div class="row">
+    <div class="col-sm-6">
+      <div class="border border-primary pb-0 pl-2 pt-2 pr-2">
+        <h5 class="text-primary">
+          Portfolio
+        </h5>
+        <hr>
+        <table class="table table-sm table-hover table-responsive-md">
+          <thead>
+            <tr class="d-flex">
+              <th class="col-3" style="text-align: right;">Symbol</th>
+              <th class="col-3" style="text-align: right;">Price</th>
+              <th class="col-3" style="text-align: right;">Quantity</th>
+              <th class="col-3" style="text-align: right;">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for type in types %}
+              <tr class="d-flex">
+                {% if type == 'growth' %}
+                <td class="col-9" style="background-color:#fff2e6"><strong>{{ type }}</strong></td>
+                <td class="col-3" style="background-color:#fff2e6;text-align:right"><strong>{{ accum_growth_f }}</strong></td>
+                {% endif %}
+                {% if type == 'income' %}
+                <td class="col-9" style="background-color:#e6f7ff"><strong>{{ type }}</strong></td>
+                <td class="col-3" style="background-color:#e6f7ff;text-align:right"><strong>{{ accum_income_f }}</strong></td>
+                {% endif %}
+                {% if type == 'cash' %}
+                <td class="col-9" style="background-color:#f3fff3"><strong>{{ type }}</strong></td>
+                <td class="col-3" style="background-color:#f3fff3;text-align:right"><strong>{{ accum_cash_f }}</strong></td>
+                {% endif %}
+              </tr>
+              {% for hldg in hldgs %}
+                {% if hldg.2 == type %}
+                  <tr class="d-flex">
+                    <td class="col-3" style="text-align: right;">{{ hldg.0 }}</td>
+                    <td class="col-3" style="text-align: right;">{{ hldg.1 }}</td>
+                    <td class="col-3" style="text-align: right;">{{ hldg.3 }}</td>
+                    <td class="col-3" style="text-align: right;">{{ hldg.4 }}</td>
+                {% endif %}
+                  </tr>
+              {% endfor %}
+            {% endfor %}
+
+          </tbody>
+        </table>
+
+
+      </div>
+    </div>
+
+
+    <div class="col-sm-6">
+      <div class="border border-primary pb-0 pl-2 pt-2">
+        <h5 class="text-primary">
+          Asset Allocation
+        </h5>
+        <hr>
+        <div id="piediv" ><canvas id="piecanvas"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="accum_cash" style="display:none">{{ accum_cash }}</div>
+<div id="accum_income" style="display:none">{{ accum_income }}</div>
+<div id="accum_growth" style="display:none">{{ accum_growth }}</div>
+
+{% endblock %}

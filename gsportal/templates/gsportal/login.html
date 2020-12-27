@@ -1,0 +1,15 @@
+{% extends 'gsportal/layout.html' %}
+
+
+{% block body %}
+<div class="container" style="margin-top:80px">
+<h2>Login to Vista</h2>
+<hr>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Login</button>
+</form>
+<hr>
+</div>
+{% endblock %}
