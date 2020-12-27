@@ -18,6 +18,8 @@ from datetime import datetime
 from django.utils import timezone
 from django.core.mail import send_mail
 from dotenv import load_dotenv
+import os
+
 
 load_dotenv()   # start by loading the env variables, including api keys
 
