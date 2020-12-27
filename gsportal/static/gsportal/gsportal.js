@@ -17,7 +17,8 @@ document.addEventListener("DOMContentLoaded", function() {
     // Then we'll use this time information to determine what data we'll need to
     // get for the graphs.
 
-    fetch('https://api.polygon.io/v1/marketstatus/now?apiKey=')
+    const polykey = document.querySelector('#polykey').innerText;
+    fetch('https://api.polygon.io/v1/marketstatus/now?apiKey=' + polykey)
     .then((resp) => resp.json())
     .then(data =>  {
       let dateStr = data.serverTime.slice(0,10);
@@ -40,9 +41,10 @@ document.addEventListener("DOMContentLoaded", function() {
       let minInt = dt.slice(15,17);
       console.log(mktIsOpen, mktIsExtHours, mktIsClosed);
       console.log(`HH=${hourInt}, MM=${minInt}`);  // hours
+      const fmpkey = document.querySelector('#fmpkey').innerText;
       let fmpBaseURL = 'https://financialmodelingprep.com/api/v3/historical-chart/';
       let exchanges = ['%5EDJI', '%5EIXIC', '%5EGSPC'];
-      let apiKey = '?apikey=';
+      let apiKey = '?apikey=' + fmpkey;
       // fmp URL = fmpBaseURL + mins + exchange + apiKey
       var mins;
       if ((mktIsOpen) && (parseInt(hourInt) < 10)) {
@@ -1261,7 +1263,8 @@ function randIndex(l) {
 // market status:  'open', 'closed', or 'extended-hours'
 
 function getMarket() {
-  fetch('https://api.polygon.io/v1/marketstatus/now?apiKey=')
+  const polykey = document.querySelector('#polykey').innerText;
+  fetch('https://api.polygon.io/v1/marketstatus/now?apiKey=' + polykey)
   .then((resp) => resp.json())
   .then(data =>  {
   // console.log(`market ${data.market}`);

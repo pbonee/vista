@@ -219,6 +219,8 @@ def landing(request):
 
 @login_required
 def dash(request):
+    request.session["polykey"] = os.getenv("APCA_API_KEY_ID")
+    request.session["fmpkey"] = os.getenv("FMP_API_KEY")
     return render(request, "gsportal/dash.html")
 
 @login_required

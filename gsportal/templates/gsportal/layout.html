@@ -164,7 +164,9 @@
   {% endblock %}
 
   <div class="jumbotron text-center p-1 small" style="margin-bottom:0">
-    <p class="mt-1">© 2020 Pete Bonee </p>
+    <p class="mt-1">© 2020 Pete Bonee</p>
+    <span hidden id="polykey">{{ request.session.polykey }}</span>
+    <span hidden id="fmpkey">{{ request.session.fmpkey }}</span>
   </div>
 
 </body>
