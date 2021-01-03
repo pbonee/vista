@@ -638,6 +638,8 @@ def portfolio(request):
 
 
 def register(request):
+    request.session["polykey"] = os.getenv("APCA_API_KEY_ID")
+    request.session["fmpkey"] = os.getenv("FMP_API_KEY")
     if request.user.is_authenticated:
         return redirect('dash')
     if request.method == 'POST':

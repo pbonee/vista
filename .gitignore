@@ -9,6 +9,7 @@ devnotes.txt
 .DS_Store
 *.py[cod]
 *$py.class
+vista_db
 
 # Distribution / packaging
 .Python

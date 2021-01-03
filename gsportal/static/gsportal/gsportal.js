@@ -1264,6 +1264,7 @@ function randIndex(l) {
 
 function getMarket() {
   const polykey = document.querySelector('#polykey').innerText;
+  console.log({polykey});
   fetch('https://api.polygon.io/v1/marketstatus/now?apiKey=' + polykey)
   .then((resp) => resp.json())
   .then(data =>  {
