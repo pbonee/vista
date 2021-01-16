@@ -44,7 +44,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'gsportal'
+    'gsportal',
+    'django_celery_beat',
+    'django_celery_results'
 ]
 
 AUTH_USER_MODEL = 'gsportal.MyUser'
@@ -78,6 +80,9 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'vista.wsgi.application'
+
+# Celery settings
+CELERY_RESULT_BACKEND = "django-db"
 
 
 # Database
