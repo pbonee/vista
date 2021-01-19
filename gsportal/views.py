@@ -134,30 +134,30 @@ def refreshprices():
                     a.save()
                 else:
                     print(f"unable to update {astr}") # failure getting price info
-                if newsCheck <= 0:  # time to check the news!
-                        print("got to news check")
-                        News.objects.filter(symbol=a).delete()  # we just overwrite news
-                        resp = client.reference_ticker_news(astr)
-                        print(f"for {astr} there were {len(resp.news)} items")
-                        if len(resp.news) >= STORIES_PER_SYMBOL:
-                            for i in range(STORIES_PER_SYMBOL):
-                                ntitle = resp.news[i].title
-                                if len(ntitle) > 55:    # need to limit size for scroller
-                                    words = ntitle.split()  # split into [words]
-                                    newstr = ''
-                                    i = 0
-                                    while (len(newstr) < 55):
-                                        newstr = newstr + ' ' + words[i]
-                                        i += 1
-                                    ntitle = newstr[:62] + " ..."
-                                nurl = resp.news[i].url
-                                n = News(symbol=a, headline=ntitle, articleURL=nurl)
-                                n.save()
-
-    if newsCheck <= 0:  # if this was our news cycle, reset counter
-        newsCheck = NEWS_CHECK
-    else:
-        newsCheck -= 1   # else count down
+    #             if newsCheck <= 0:  # time to check the news!
+    #                     print("got to news check")
+    #                     News.objects.filter(symbol=a).delete()  # we just overwrite news
+    #                     resp = client.reference_ticker_news(astr)
+    #                     print(f"for {astr} there were {len(resp.news)} items")
+    #                     if len(resp.news) >= STORIES_PER_SYMBOL:
+    #                         for i in range(STORIES_PER_SYMBOL):
+    #                             ntitle = resp.news[i].title
+    #                             if len(ntitle) > 55:    # need to limit size for scroller
+    #                                 words = ntitle.split()  # split into [words]
+    #                                 newstr = ''
+    #                                 i = 0
+    #                                 while (len(newstr) < 55):
+    #                                     newstr = newstr + ' ' + words[i]
+    #                                     i += 1
+    #                                 ntitle = newstr[:62] + " ..."
+    #                             nurl = resp.news[i].url
+    #                             n = News(symbol=a, headline=ntitle, articleURL=nurl)
+    #                             n.save()
+    #
+    # if newsCheck <= 0:  # if this was our news cycle, reset counter
+    #     newsCheck = NEWS_CHECK
+    # else:
+    #     newsCheck -= 1   # else count down
     return
 
 def monitoralerts():
