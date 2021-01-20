@@ -22,6 +22,17 @@ class Asset(models.Model):
     def __str__(self):
 	       return self.assetSymbol
 
+class MktInfo(models.Model):
+    """Just one row: NY market status and last time checked, in NY time zone"""
+    mktStatus = models.CharField(max_length=20)      # open, closed, extended hours
+    lastCheckTimeNY = models.DateTimeField(auto_now=False, auto_now_add=False, null=True, blank=True)
+
+class IndexData(models.Model):
+    """Will hold current or previous day indices data points for charts. NY time stamps."""
+    timeStampNY = models.DateTimeField(auto_now=False, auto_now_add=False, null=True, blank=True)
+    DJIvalue = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    GSPCvalue = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    IXICvalue = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
 
 class Account(models.Model):
     user = models.ForeignKey("MyUser", on_delete=models.CASCADE, related_name="accounts")
