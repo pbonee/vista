@@ -23,7 +23,7 @@ class Asset(models.Model):
 	       return self.assetSymbol
 
 class MktInfo(models.Model):
-    """Just one row: NY market status and last time checked, in NY time zone"""
+    """Just one row:  NY market status and last time checked, in NY time zone"""
     mktStatus = models.CharField(max_length=20)      # open, closed, extended hours
     lastCheckTimeNY = models.DateTimeField(auto_now=False, auto_now_add=False, null=True, blank=True)
 
