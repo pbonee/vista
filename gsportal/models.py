@@ -27,12 +27,23 @@ class MktInfo(models.Model):
     mktStatus = models.CharField(max_length=20)      # open, closed, extended hours
     lastCheckTimeNY = models.DateTimeField(auto_now=False, auto_now_add=False, null=True, blank=True)
 
+    def __str__(self):
+        return f"at {self.lastCheckTimeNY} UTC, mkt status was: {self.mktStatus}"
+
+    class Meta:
+        verbose_name = "Market Info"
+        verbose_name_plural = "Market Info"
+
 class IndexData(models.Model):
     """Will hold current or previous day indices data points for charts. NY time stamps."""
     timeStampNY = models.DateTimeField(auto_now=False, auto_now_add=False, null=True, blank=True)
     DJIvalue = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
     GSPCvalue = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
     IXICvalue = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Index Data'
+        verbose_name_plural = 'Index Data'
 
 class Account(models.Model):
     user = models.ForeignKey("MyUser", on_delete=models.CASCADE, related_name="accounts")
@@ -82,3 +93,5 @@ class AlertQ(models.Model):    # FIFO queue for alerts to go out to clients
 
     class Meta:
         ordering = ('created',)
+        verbose_name = 'Alert Queue'
+        verbose_name_plural = 'Alert Queue'

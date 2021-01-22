@@ -21,14 +21,14 @@ from dotenv import load_dotenv
 import os
 
 
-load_dotenv()   # start by loading the env variables, including api keys
-
-"""
-Twilio credentials below - to be removed before pushing to Github
-"""
-from twilio.rest import Client
-account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+# load_dotenv()   # start by loading the env variables, including api keys
+#
+# """
+# Twilio credentials below - to be removed before pushing to Github
+# """
+# from twilio.rest import Client
+# account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+# auth_token = os.getenv("TWILIO_AUTH_TOKEN")
 
 
 # Create your views here.
@@ -96,44 +96,44 @@ def kick_me(request):
     # return anything to client... Just ensures up-to-date prices. The client is
     # responsible for calling this as frequently as necessary, ideally a second
     # or so before client calls for account data refresh.
-    refreshprices()
-    monitoralerts()   # after updating prices, check if any alerts triggered
+    # refreshprices()
+    # monitoralerts()   # after updating prices, check if any alerts triggered
     return JsonResponse({"message":"completed"}, status = 200)
 
 NEWS_CHECK = 20   # global. Check for stock news this often. (refreshprices() visits)
 newsCheck = 0     # global. Counter. When 0 refreshprices() also refreshes news.
 STORIES_PER_SYMBOL = 5  # Number of news stories we'll get per stock
-
+#
 def refreshprices():
-    # This function refreshes asset prices.
-    # TBD: Need to refine the date/time functionality to precisely choose
-    # last market close date. For now, just using today's PT date - 1.
-
-    """
-    Polygon.io credentials below - to be removed before pushing to Github
-    """
-    key = os.getenv("APCA_API_KEY_ID")
-    global NEWS_CHECK
-    global newsCheck
-    global STORIES_PER_SYMBOL
-    with RESTClient(key) as client:
-
-        assetsall = Asset.objects.all()
-        for a in assetsall:
-            astr = a.assetSymbol.upper()
-            if astr != "CASH":
-                resp = client.stocks_equities_previous_close(astr)
-                prevclose = resp.results[0]['c']
-                resp = client.stocks_equities_last_trade_for_a_symbol(astr)
-                lastprice = resp.last.price
-                print(f"{astr}, status={resp.status} prevclose={prevclose}, lasttrade={lastprice}")
-                if resp.status == 'success':
-                    a.lastPrice = lastprice
-                    a.openingPrice = prevclose
-                    a.lastLook = timezone.now()
-                    a.save()
-                else:
-                    print(f"unable to update {astr}") # failure getting price info
+#     # This function refreshes asset prices.
+#     # TBD: Need to refine the date/time functionality to precisely choose
+#     # last market close date. For now, just using today's PT date - 1.
+#
+#     """
+#     Polygon.io credentials below - to be removed before pushing to Github
+#     """
+#     key = os.getenv("APCA_API_KEY_ID")
+#     global NEWS_CHECK
+#     global newsCheck
+#     global STORIES_PER_SYMBOL
+#     with RESTClient(key) as client:
+#
+#         assetsall = Asset.objects.all()
+#         for a in assetsall:
+#             astr = a.assetSymbol.upper()
+#             if astr != "CASH":
+#                 resp = client.stocks_equities_previous_close(astr)
+#                 prevclose = resp.results[0]['c']
+#                 resp = client.stocks_equities_last_trade_for_a_symbol(astr)
+#                 lastprice = resp.last.price
+#                 print(f"{astr}, status={resp.status} prevclose={prevclose}, lasttrade={lastprice}")
+#                 if resp.status == 'success':
+#                     a.lastPrice = lastprice
+#                     a.openingPrice = prevclose
+#                     a.lastLook = timezone.now()
+#                     a.save()
+#                 else:
+#                     print(f"unable to update {astr}") # failure getting price info
     #             if newsCheck <= 0:  # time to check the news!
     #                     print("got to news check")
     #                     News.objects.filter(symbol=a).delete()  # we just overwrite news
@@ -160,55 +160,55 @@ def refreshprices():
     #     newsCheck -= 1   # else count down
     return
 
-def monitoralerts():
-    # This function looks to see if any alerts should be triggered
-    alrts = Alert.objects.all()
-    for alrt in alrts:
-        stock = Asset.objects.filter(assetSymbol=alrt.symbol).first()
-        if alrt.movement == 'goes above':   # if there is a go-above alert set
-            if alrt.lastLook <= alrt.threshold:  # if last time we were below threshold
-                if stock.lastPrice > alrt.threshold: # are we now above threshold?
-                    sendAlert(alrt)              # Send alert!
-        elif alrt.movement == 'goes below':  # if there is a go-below alert set:
-            if alrt.lastLook >= alrt.threshold:  # if last time we were above threshold
-                if stock.lastPrice < alrt.threshold: # are we now below threshold?
-                    sendAlert(alrt)              # Send alert!
-        alrt.lastLook = stock.lastPrice     # in any case, update lastLook to current price
-        alrt.save()
-    return
-
-
-#  This func takes alert object and sends out appropriate alert
-def sendAlert(alrt):
-    print('')
-    if alrt.movement == 'goes above':
-        say = "crossed above"
-    elif alrt.movement == 'goes below':
-        say = "crossed below"
-    else:
-        say = alrt.movement
-    txtmsg = f"ALERT: {alrt.symbol} {say} {alrt.threshold} at {datetime.now().strftime('%m/%d %H:%M')}"
-    print(txtmsg)
-    print('')
-    cm = AlertQ(user=alrt.user, alertmessage=txtmsg)
-    cm.save()    # put in queue to go out to client on next get_portfolio
-    if alrt.text_notification:
-        ph = alrt.user.mobile_number
-        print(f"We got to text notif. and the user's phone no. is: {alrt.user.mobile_number}")
-        print(f"the user is: {alrt.user}")
-        print(f"user's phone number is: {alrt.user.mobile_number}")
-        if ph[0:2] != "+1": # if no +1 in front of mobile number add it
-            ph = '+1' + ph
-        if len(ph) == 12:      # only proceed if we have 12 character US phone number
-            client = Client(account_sid, auth_token)
-            message = client.messages \
-                            .create(
-                                 body=txtmsg,
-                                 from_='+16203712944',
-                                 to=ph
-                             )
-            print(message.sid)
-    return
+# def monitoralerts():
+#     # This function looks to see if any alerts should be triggered
+#     alrts = Alert.objects.all()
+#     for alrt in alrts:
+#         stock = Asset.objects.filter(assetSymbol=alrt.symbol).first()
+#         if alrt.movement == 'goes above':   # if there is a go-above alert set
+#             if alrt.lastLook <= alrt.threshold:  # if last time we were below threshold
+#                 if stock.lastPrice > alrt.threshold: # are we now above threshold?
+#                     sendAlert(alrt)              # Send alert!
+#         elif alrt.movement == 'goes below':  # if there is a go-below alert set:
+#             if alrt.lastLook >= alrt.threshold:  # if last time we were above threshold
+#                 if stock.lastPrice < alrt.threshold: # are we now below threshold?
+#                     sendAlert(alrt)              # Send alert!
+#         alrt.lastLook = stock.lastPrice     # in any case, update lastLook to current price
+#         alrt.save()
+#     return
+#
+#
+# #  This func takes alert object and sends out appropriate alert
+# def sendAlert(alrt):
+#     print('')
+#     if alrt.movement == 'goes above':
+#         say = "crossed above"
+#     elif alrt.movement == 'goes below':
+#         say = "crossed below"
+#     else:
+#         say = alrt.movement
+#     txtmsg = f"ALERT: {alrt.symbol} {say} {alrt.threshold} at {datetime.now().strftime('%m/%d %H:%M')}"
+#     print(txtmsg)
+#     print('')
+#     cm = AlertQ(user=alrt.user, alertmessage=txtmsg)
+#     cm.save()    # put in queue to go out to client on next get_portfolio
+#     if alrt.text_notification:
+#         ph = alrt.user.mobile_number
+#         print(f"We got to text notif. and the user's phone no. is: {alrt.user.mobile_number}")
+#         print(f"the user is: {alrt.user}")
+#         print(f"user's phone number is: {alrt.user.mobile_number}")
+#         if ph[0:2] != "+1": # if no +1 in front of mobile number add it
+#             ph = '+1' + ph
+#         if len(ph) == 12:      # only proceed if we have 12 character US phone number
+#             client = Client(account_sid, auth_token)
+#             message = client.messages \
+#                             .create(
+#                                  body=txtmsg,
+#                                  from_='+16203712944',
+#                                  to=ph
+#                              )
+#             print(message.sid)
+#     return
 
 
 def landing(request):
@@ -314,7 +314,7 @@ def get_portfolio(request):
         alertRow = ['$ALERT', amsg.alertmessage]
         rowsToAdd.append(alertRow)
     portfolio = portfolio + rowsToAdd
-    AlertQ.objects.filter(user=u).delete()   # delete alerts that were in queue
+    # AlertQ.objects.filter(user=u).delete()   # delete alerts that were in queue
     print(portfolio)
     # return JsonResponse(portfolio, safe=False)
     return JsonResponse(portfolio, safe=False)

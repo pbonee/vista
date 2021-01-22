@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
 
 from .forms import MyUserCreationForm, MyUserChangeForm
-from .models import MyUser, Account, Asset, News, AcctHolding, Alert, AlertQ
+from .models import MyUser, Account, Asset, News, AcctHolding, Alert, AlertQ, MktInfo, IndexData
 
 # Register your models here.
 
@@ -24,3 +24,5 @@ admin.site.register(News)
 admin.site.register(Alert)
 admin.site.register(AcctHolding)
 admin.site.register(AlertQ)
+admin.site.register(MktInfo)
+admin.site.register(IndexData)
