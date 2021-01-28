@@ -151,18 +151,86 @@ def sendAlert(alrt):
 
 @shared_task(name="stat_update")
 def stat_update():
-    """Task to check market status from polygon.io"""
-    key = os.getenv("APCA_API_KEY_ID")
-    with RESTClient(key) as client:
-        resp = client.reference_market_status()
-    d = datetime.fromisoformat(resp.serverTime) # convert polygon's ISO format to Python time
-    dstring = d.strftime('%m/%d %H:%M')         # and create a string version (in NY time)
-    mktstatus = resp.market
-    print(f"stat_update task: at {dstring} NY time the status is {mktstatus}")
-    MktInfo.objects.all().delete()              # get rid of previous db table entry
-    m = MktInfo(mktStatus=mktstatus, lastCheckTimeNY=d)
-    m.save()                                    # and create new db entry - current time and status
+    """Task to get latest time and market status. Run this every 5 seconds."""
+    d = timezone.localtime()                # NY time in Python format
+    if MktInfo.objects.first() is not None:     # make sure there exists an object in table
+        if (((d.minute == 0) or (d.minute == 30)) and d.second < 15):  # at possible mkt status boundary?
+            # We have limited quota with polygon, so want to minimize how frequently we check!
+            key = os.getenv("APCA_API_KEY_ID")  # get status from polygon
+            with RESTClient(key) as client:
+                resp = client.reference_market_status()
+            MktInfo.objects.all().delete()              # get rid of previous db table entry
+            m = MktInfo(mktStatus=resp.market, lastCheckTimeNY=d)
+            m.save()                                    # and create new db entry
+            return
+        else:   # We are not at time when market status would change. just update time.
+            m = MktInfo.objects.first()
+            m.lastCheckTimeNY = d
+            m.save()
+            return
 
+    else:  # first time here!  No object yet in database, so create it.
+         key = os.getenv("APCA_API_KEY_ID")  # get status from polygon
+         with RESTClient(key) as client:
+             resp = client.reference_market_status()
+         m = MktInfo(mktStatus=mktstatus, lastCheckTimeNY=d)
+         m.save()                                    # and create new db entry - current time and status
+         return
+
+
+@shared_task(name="index_data")
+def index_data():
+    """Every 55 sec, update market indices in db."""
+
+    def yahoo_index(ticker):
+        """ returns tuple with status, price, and previous, for an index. as floats."""
+        yhurl = "https://finance.yahoo.com/quote/^" + ticker
+        try:
+            page = requests.get(yhurl, timeout=2)
+        except:
+            print(f"ERROR: timeout on finance.yahoo.com/quote/{ticker}")
+            return ('error', None, None,)
+        else:
+            soup = BeautifulSoup(page.text, features="html.parser")
+            current_price = soup.find(class_="Trsdu(0.3s) Fw(b) Fz(36px) Mb(-4px) D(ib)")
+            if not current_price:
+                print(f"ERROR: Could not find current price element in page")
+                return ('error', None, None,)
+            prev_close = soup.find("span", {"data-reactid":"42"})
+            if not prev_close:
+                print(f"ERROR: Could not find previous close element in page")
+                return ('error', None, None,)
+            pstring = current_price.string
+            pfloat = float(pstring.replace(',', ''))
+            cstring = prev_close.string
+            cfloat = float(cstring.replace(',', ''))
+            return ('success', pfloat, cfloat,)
+
+    t = timezone.localtime()        # NY time
+    ms = MktInfo.objects.first()    # first check if market open
+    if ms.mktStatus == 'open':
+        firstrow = IndexData.objects.first()  # if open, is db showing today's data?
+        if (firstrow is not None) and (timezone.localtime(firstrow.timeStampNY).day != t.day):
+            IndexData.objects.all().delete()  # if not, market must have just opened
+                                              # clear prev day's data when new trading day opens
+        print(f"index_data task: getting indices at {t.strftime('%m/%d %H:%M')}")
+        d = yahoo_index('DJI')
+        if d[0] == 'error':
+            print(f"error retrieving info for DJI")
+        print(f"writing index data to db: DJI current= {d[1]}, previous= {d[2]}")
+        s = yahoo_index('GSPC')
+        if s[0] == 'error':
+            print(f"error retrieving info for GSPC")
+        print(f"writing index data to db: GSPC current= {s[1]}, previous= {s[2]}")
+        n = yahoo_index('IXIC')
+        if n[0] == 'error':
+            print(f"error retrieving info for IXIC")
+        print(f"writing index data to db: IXIC current= {n[1]}, previous= {n[2]}")
+        id = IndexData(timeStampNY=t, DJIvalue=d[1], GSPCvalue=s[1], IXICvalue=n[1], prevDJIclose=d[2], prevGSPCclose=s[2], prevIXICclose=n[2])
+        id.save()  # commit to db
+    else:
+        print("index_data task: Skipping index updates. Market is not open.")
+    return
 
 
 @shared_task(name="heartbeat")

@@ -16,6 +16,7 @@ urlpatterns = [
      path("get_portfolio", views.get_portfolio, name="get_portfolio"),  # AJAX portfolio
      path("alerts", views.alerts, name="alerts"),
      path("portfolio", views.portfolio, name="portfolio"),              # static portfolio
-     path("settings", views.settings, name="settings")
+     path("settings", views.settings, name="settings"),
+     path("delete_alert", views.delete_alert, name="delete_alert")
 
 ]

@@ -3,7 +3,7 @@ from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from .forms import MyUserCreationForm, MyUserChangeForm
-from .models import MyUser, Account, Asset, AcctHolding, News, Alert, AlertQ
+from .models import MyUser, Account, Asset, AcctHolding, News, Alert, AlertQ, IndexData, MktInfo
 from .forms import AccountForm, AlertForm
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -228,10 +228,9 @@ def get_portfolio(request):
     # Similar to acct_content view, but like we have only one account.
     # Here the data structure is simply an array of row-data arrays. Each row:
     # [sym, price, price_chg, chg_pct, type, quantity, value, pct_of_total]
-    # Last [] should have sym = 'TOTAL' and show price_chg and value for portfolio.
-    # We will need "open_price" info for each asset and use sum of open_price * qty
-    # of each asset as the basis for calculating changes in portolio value.
-    # TBD: Daily task that builds a new db table to keep daily portfolio value.
+    # Last stocks row has sym = 'TOTAL' and show price_chg and value for portfolio.
+    # Then we append news items with symbol $NEWS. Then we append $ALERTS.
+    # Then come $DJI, $GSPC, $IXIC and $MKT rows.  See spec for data structure.
     u = MyUser.objects.filter(pk=request.user.pk).first()  # identify our user
     accts = Account.objects.filter(user=u)
     portfolio = []
@@ -311,13 +310,69 @@ def get_portfolio(request):
     amsgs = AlertQ.objects.filter(user=u)
 
     for amsg in amsgs:
-        alertRow = ['$ALERT', amsg.alertmessage]
+        alertRow = ['$ALERT', amsg.alertID, amsg.alertmessage]
         rowsToAdd.append(alertRow)
     portfolio = portfolio + rowsToAdd
-    # AlertQ.objects.filter(user=u).delete()   # delete alerts that were in queue
-    print(portfolio)
+
     # return JsonResponse(portfolio, safe=False)
+
+    # Now work on market index rows.
+    # We rely on db having a set of index data for previous trading day if we haven't
+    # yet started a new trading day, or, if market is now open, having a set of
+    # data points for indices in today's session.  Either way, we rely on the
+    # db table having a set of data points all with same date. So we start with
+    # earliest timestamp and take subsequent points every 30 minutes, for as many
+    # 30-minute samples as we can get.
+
+    i = IndexData.objects.all().order_by('timeStampNY')
+    if len(i) > 0:
+        # for DJ, S&P and NASDAQ, record the previous close and latest values
+        d = ['$DJI', str(i[len(i)-1].prevDJIclose), str(i[len(i)-1].DJIvalue)]    # dji jones row
+        s = ['$GSPC', str(i[len(i)-1].prevGSPCclose), str(i[len(i)-1].GSPCvalue)]   # gspc row
+        n = ['$IXIC', str(i[len(i)-1].prevIXICclose), str(i[len(i)-1].IXICvalue)]    # ixic row
+        # now go through every row of IndexData and pick the :00/:30 minute data points
+        for j in i:
+            if j.timeStampNY.minute % 30 == 0:    # if timestamp is :00 or :30 min
+                d.append(str(j.DJIvalue))
+                s.append(str(j.GSPCvalue))
+                n.append(str(j.IXICvalue))
+    else:
+        print("ERROR in get_portfolio. IndexData appears to be empty. Skipping indices.")
+        d = ['$DJI', 0]
+        s = ['$GSPC', 0]
+        n = ['$IXIC', 0]
+    portfolio.append(d)
+    portfolio.append(s)
+    portfolio.append(n)
+
+    # Onto end of portfolio array, append the market status
+    ms = MktInfo.objects.first()
+    lastrow = ['$MKT', timezone.localtime().strftime('%b %d %Y, %H:%M:%S'), ms.mktStatus]
+    portfolio.append(lastrow)
+
+    print(portfolio)
     return JsonResponse(portfolio, safe=False)
+
+@csrf_exempt
+@login_required
+def delete_alert(request):
+    if request.method == "POST":
+        d = request.body.decode('utf-8')
+        d = json.loads(d)
+        a = AlertQ.objects.filter(alertID=d['alertID']).delete()
+        print(f"del_alert processed request to delete alertID {d['alertID']}. result = {a}")
+        if a[0] == 1:
+            return JsonResponse({
+            "success":"success!"
+            }, status = 200)
+        else:
+            return JsonResponse({
+            "error":"db error trying to delete that alertID"
+            }, status = 400)
+    else:
+        return JsonResponse({
+        "error": "delete_alert route requires POST"
+        }, status = 400)
 
 
 @login_required
