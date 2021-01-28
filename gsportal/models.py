@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
+import uuid
 
 # Create your models here.
 
@@ -22,6 +24,33 @@ class Asset(models.Model):
     def __str__(self):
 	       return self.assetSymbol
 
+class MktInfo(models.Model):
+    """Just one row:  NY market status and last time checked, in NY time zone"""
+    mktStatus = models.CharField(max_length=20)      # open, closed, extended hours
+    lastCheckTimeNY = models.DateTimeField(auto_now=False, auto_now_add=False, null=True, blank=True)
+
+    def __str__(self):
+        return f"at {timezone.localtime(self.lastCheckTimeNY).strftime('%m/%d %H:%M')} NY, mkt status was: {self.mktStatus}"
+
+    class Meta:
+        verbose_name = "Market Info"
+        verbose_name_plural = "Market Info"
+
+class IndexData(models.Model):
+    """Will hold current or previous day indices data points for charts. NY time stamps."""
+    timeStampNY = models.DateTimeField(auto_now=False, auto_now_add=False, null=True, blank=True)
+    DJIvalue = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    GSPCvalue = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    IXICvalue = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    prevDJIclose = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    prevGSPCclose = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    prevIXICclose = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+
+    def __str__(self):
+        return f"market indices at {timezone.localtime(self.timeStampNY).strftime('%m/%d %H:%M')} NY time"
+    class Meta:
+        verbose_name = 'Index Data'
+        verbose_name_plural = 'Index Data'
 
 class Account(models.Model):
     user = models.ForeignKey("MyUser", on_delete=models.CASCADE, related_name="accounts")
@@ -38,8 +67,8 @@ class AcctHolding(models.Model):
 
 class News(models.Model):
     symbol = models.ForeignKey("Asset", on_delete=models.CASCADE, related_name="news")
-    headline = models.CharField(max_length=200)
-    articleURL = models.URLField(max_length=200)
+    headline = models.CharField(max_length=400)
+    articleURL = models.URLField(max_length=400)
 
     def __str__(self):
 	       return f"{self.symbol}: {self.headline}"
@@ -68,6 +97,9 @@ class AlertQ(models.Model):    # FIFO queue for alerts to go out to clients
     user = models.ForeignKey("MyUser", on_delete=models.CASCADE, related_name="alerts_in_Q")
     alertmessage = models.CharField(max_length=50)
     created = models.DateTimeField(auto_now_add=True)
+    alertID = models.UUIDField(default=uuid.uuid4)
 
     class Meta:
         ordering = ('created',)
+        verbose_name = 'Alert Queue'
+        verbose_name_plural = 'Alert Queue'

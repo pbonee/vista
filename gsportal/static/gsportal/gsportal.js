@@ -113,6 +113,10 @@ document.addEventListener("DOMContentLoaded", function() {
             let oneMore = fmpdata[0].close;   // this will be the most recent data record
             closeps.push(oneMore);
           }
+
+// Above here, no longer need.  Old accesses to polygon and fmp from client .
+// pick up processing of index data:
+
           // Update the index pricing on page
           let basis0 = searchYestClose(dateStr, fmpdata);  // closing price from prior trading day
           if (closeps.length == 0) {
@@ -128,6 +132,7 @@ document.addEventListener("DOMContentLoaded", function() {
           else {
             prcchg0 = prcchg0.toFixed(2);   // convert to string (will include minus sign)
           };
+
           document.querySelector('#dcurrent').innerHTML = price0.toFixed(2);
           document.querySelector('#dchange').innerHTML = prcchg0;
           if (prcchg0.slice(0,1) == '+') {
@@ -150,7 +155,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
             // The data for our dataset
             data: {
-              labels: ["9:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"],
+                labels: ["open", "", "", "", "", "close"],
+        //      labels: ["9:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"],
               datasets: [
                 {
                   label: "DJI",
@@ -267,7 +273,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
             // The data for our dataset
             data: {
-              labels: ["9:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"],
+              labels: ["open", "", "", "", "", "close"],
               datasets: [
                 {
                   label: "IXIC",
@@ -385,7 +391,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
             // The data for our dataset
             data: {
-              labels: ["9:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"],
+              labels: ["open", "", "", "", "", "close"],
               datasets: [
                 {
                   label: "S&P",
@@ -493,8 +499,6 @@ document.addEventListener("DOMContentLoaded", function() {
       }
     }
 
-    // We're painting Dashboard. Next things to work on are getting news
-    // items for news pane and price info for portfolio table.
 
     // Data fetched from Django get_portfolio route.
 
@@ -514,16 +518,56 @@ document.addEventListener("DOMContentLoaded", function() {
       // no larger than 100 items.
       // Appended to this are alert items, denoted with '$ALERT' as first item.
 
-      // Pop alert items and store in browser storage alertQ
-      let alertQ = JSON.parse(localStorage.getItem("alertQ"));
-      if (alertQ == null) {
-        alertQ = [];
+      // Start with end of array.
+      // Process time and market status.
+      console.log("zeroeth look");
+      console.log(data.length);
+      console.log(data[data.length -1][0], data[data.length -1][1]);
+      if (data[data.length - 1][0] == '$MKT') {
+        let mktBufRow = data.pop(); // pop the row off
+        mktBufRow.shift();      // discard the '$MKT' symbol from start of row
+        console.log({mktBufRow});
+        localStorage.setItem('mktBuf', JSON.stringify(mktBufRow));  // store it
+      }
+      else {
+        console.log('ERROR: Did not see expected $MKT row in get_portfolio');
       };
+      // Process IXIC data
+      if (data[data.length - 1][0] == '$IXIC') {
+        let IXICBufRow = data.pop(); // pop the row off
+        IXICBufRow.shift();      // discard the '$IXIC' symbol from start of row
+        console.log({IXICBufRow});
+        localStorage.setItem('IXICBuf', JSON.stringify(IXICBufRow));  // store it
+      }
+      else {
+        console.log('ERROR: Did not see expected $IXIC row in get_portfolio');
+      };
+      // Process GSPC data
+      if (data[data.length - 1][0] == '$GSPC') {
+        let GSPCBufRow = data.pop(); // pop the row off
+        GSPCBufRow.shift();      // discard the '$GSPC' symbol from start of row
+        console.log({GSPCBufRow});
+        localStorage.setItem('GSPCBuf', JSON.stringify(GSPCBufRow));  // store it
+      }
+      else {
+        console.log('ERROR: Did not see expected $GSPC row in get_portfolio');
+      };
+      // Process DJI data
+      if (data[data.length - 1][0] == '$DJI') {
+        let DJIBufRow = data.pop(); // pop the row off
+        DJIBufRow.shift();      // discard the '$DJI' symbol from start of row
+        console.log({DJIBufRow});
+        localStorage.setItem('DJIBuf', JSON.stringify(DJIBufRow));  // store it
+      }
+      else {
+        console.log('ERROR: Did not see expected $DJI row in get_portfolio');
+      };
+      // for backward compatibility, we fall through to here if last row is $ALERT row
+      let alertQ = [];
       while (data[data.length -1][0] == '$ALERT') {
-        console.log('processing incoming alert line 518');
         alertItem = data.pop();
         alertItem.shift();    // discard the '$ALERT' symbol
-        alertItem.unshift(guidGenerator()); // prepend guid
+        // alertItem.unshift(guidGenerator()); // prepend guid  //INCLUDED IN NEW API 2021.01.23
         alertQ.push(alertItem);  // put news into alertQ
       };
       if (alertQ.length > 5) {  // we'll discard anything over 5 alerts for now
@@ -532,7 +576,7 @@ document.addEventListener("DOMContentLoaded", function() {
       console.log(`Here is the current alert queue:`);
       console.log(alertQ);
       localStorage.setItem("alertQ", JSON.stringify(alertQ));
-
+      updateAlerts(); // update the alerts badge and modal content - first load of page
       // Pop news items from server and store them in browser storage - newsQ.
       let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
 
@@ -556,7 +600,7 @@ document.addEventListener("DOMContentLoaded", function() {
       document.querySelector('#table_container').appendChild(dashTable)  // put table in DOM
       })  // last .then of fetch(/get_portfolio)
 
-  updateAlerts(); // update the alerts badge and modal content - first load of page
+
   } // end of if dash block
 
   else if (window.location.pathname == "/accounts") {
@@ -810,28 +854,79 @@ document.addEventListener("DOMContentLoaded", function() {
       curPage = window.location.pathname;
       console.log(`time to refresh.  current page: ${curPage}`);
       if (curPage == '/dash') {   // on /dash, do periodic refreshes
-        fetch('/kick_me')
-        .then((resp) => resp.json())
-        .then((data) => {
-          console.log(`message from /kickme: ${data.message}`);
+        // fetch('/kick_me')
+        // .then((resp) => resp.json())
+        // .then((data) => {
+        //   console.log(`message from /kickme: ${data.message}`);
           // Now get portfolio updated data and update /dash table
           fetch('/get_portfolio')
           .then((resp) => resp.json())
           .then((data) => {
-
-            // Pop alert items and store in browser storage alertQ
-            console.log('line 701 to check for $ALERT');
-            let alertQ = JSON.parse(localStorage.getItem("alertQ"));
-            if (alertQ == null) {
-              alertQ = [];
+            console.log("first look");
+            console.log(data.length);
+            console.log(data[data.length -1][0], data[data.length -1][1]);   // print last row
+            // Start with end of array.
+            // Process time and market status.
+            if (data[data.length - 1][0] == '$MKT') {
+              let mktBufRow = data.pop(); // pop the row off
+              mktBufRow.shift();      // discard the '$MKT' symbol from start of row
+              console.log({mktBufRow});
+              localStorage.setItem('mktBuf', JSON.stringify(mktBufRow));  // store it
+            }
+            else {
+              console.log('ERROR: Did not see expected $MKT row in get_portfolio');
             };
-            console.log(`alertQ prev value from localStorage= ${alertQ}`);
-            console.log(`last array line = ${data[data.length - 1]}`);
+            console.log("second look");
+            console.log(data.length);
+            console.log(data[data.length -1][0], data[data.length -1][1]);
+            // Process IXIC data
+            if (data[data.length - 1][0] == '$IXIC') {
+              let IXICBufRow = data.pop(); // pop the row off
+              IXICBufRow.shift();      // discard the '$IXIC' symbol from start of row
+              console.log({IXICBufRow});
+              localStorage.setItem('IXICBuf', JSON.stringify(IXICBufRow));  // store it
+            }
+            else {
+              console.log('ERROR: Did not see expected $IXIC row in get_portfolio');
+            };
+            console.log("third look");
+            console.log(data.length);
+            console.log(data[data.length -1][0], data[data.length -1][1]);
+            // Process GSPC data
+            if (data[data.length - 1][0] == '$GSPC') {
+              let GSPCBufRow = data.pop(); // pop the row off
+              GSPCBufRow.shift();      // discard the '$GSPC' symbol from start of row
+              console.log({GSPCBufRow});
+              localStorage.setItem('GSPCBuf', JSON.stringify(GSPCBufRow));  // store it
+            }
+            else {
+              console.log('ERROR: Did not see expected $GSPC row in get_portfolio');
+            };
+            console.log("fourth look");
+            console.log(data.length);
+            console.log(data[data.length -1][0], data[data.length -1][1]);
+            // Process DJI data
+            if (data[data.length - 1][0] == '$DJI') {
+              let DJIBufRow = data.pop(); // pop the row off
+              DJIBufRow.shift();      // discard the '$DJI' symbol from start of row
+              console.log({DJIBufRow});
+              localStorage.setItem('DJIBuf', JSON.stringify(DJIBufRow));  // store it
+            }
+            else {
+              console.log('ERROR: Did not see expected $DJI row in get_portfolio');
+            };
+            console.log("fifth look");
+            console.log(data.length);
+            console.log(data[data.length -1][0], data[data.length -1][1]);
+            // for backward compatibility, we fall through to here if last row is $ALERT row
+            let alertQ = [];  // 2021.01.23 changes
+            // console.log(`alertQ prev value from localStorage= ${alertQ}`);
+            // console.log(`last array line = ${data[data.length - 1]}`);
             while (data[data.length -1][0] == '$ALERT') {
               console.log('line 709 We saw an $ALERT');
               alertItem = data.pop();
               alertItem.shift();    // discard the '$ALERT' symbol
-              alertItem.unshift(guidGenerator()); // prepend guid
+              // alertItem.unshift(guidGenerator()); // prepend guid //INCLUDED IN NEW API 2021.01.23
               alertQ.push(alertItem);  // put news into alertQ
             };
             if (alertQ.length > 5) {  // we'll discard anything over 5 alerts for now
@@ -855,6 +950,7 @@ document.addEventListener("DOMContentLoaded", function() {
             console.log(`Here is the current news queue:`);
             console.log(newsQ);
             localStorage.setItem("newsQ", JSON.stringify(newsQ));
+
 
             var portfolio = data;
             let origLength = portfolio.length;
@@ -940,7 +1036,7 @@ document.addEventListener("DOMContentLoaded", function() {
             // Finally let's update the alerts:
             updateAlerts(); // update the alerts badge and modal content
           }); // .then of second/nested fetch
-        }); // .then of first fetch
+        // }); // .then of first fetch
         setTimeout(refreshAcctData, 20000);  // while in /dash page, run refreshAcctData every 20 secs.
 
         // This would be a good place to refresh Market index charts.
@@ -1360,7 +1456,7 @@ function updateAlerts() {
     newClone.classList.add('mbExcDefault');  // all alert divs except the template and default (no alerts) will get this class
     newClone.style.display = "inline-block"; // set it to display
     let row = alertQ[i];
-    newClone.setAttribute("id", row[0]); // set id=GUID
+    newClone.setAttribute("id", row[0]); // set id=UUID
     // console.log(`newClone= ${newClone}`);
     // console.log(`newClone classes= ${newClone.classList}`);
     // console.log(`newClone id= ${newClone.id}`);
@@ -1395,6 +1491,28 @@ function deleteAlert() {
     // console.log(`row from alertQ: ${row}`);
     if ('d' + row[0] == dguid) {
       alertQ.splice(i, 1);
+      // use API route for delete_alert
+      let postdata = {alertID:row[0]};
+      let postdata1 = JSON.stringify(postdata);
+      console.log(`postdata1 = ${postdata1}`);
+      fetch('/delete_alert', {
+          method: 'POST',
+          body: postdata1
+          })
+        .then( function(response) {
+          console.log(`sent POST to delete alert ${row[0]}`);
+          respstatus = response.status;
+          console.log(respstatus);
+          return response.json();
+          })
+        .then(function(result) {
+          respmessage = result.error || result.success;
+          console.log(respmessage);
+          })
+        .catch(error => {
+          console.log(error);
+        })
+
       break;
     };
   };

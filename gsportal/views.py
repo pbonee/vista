@@ -3,7 +3,7 @@ from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from .forms import MyUserCreationForm, MyUserChangeForm
-from .models import MyUser, Account, Asset, AcctHolding, News, Alert, AlertQ
+from .models import MyUser, Account, Asset, AcctHolding, News, Alert, AlertQ, IndexData, MktInfo
 from .forms import AccountForm, AlertForm
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -21,14 +21,14 @@ from dotenv import load_dotenv
 import os
 
 
-load_dotenv()   # start by loading the env variables, including api keys
-
-"""
-Twilio credentials below - to be removed before pushing to Github
-"""
-from twilio.rest import Client
-account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+# load_dotenv()   # start by loading the env variables, including api keys
+#
+# """
+# Twilio credentials below - to be removed before pushing to Github
+# """
+# from twilio.rest import Client
+# account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+# auth_token = os.getenv("TWILIO_AUTH_TOKEN")
 
 
 # Create your views here.
@@ -96,119 +96,119 @@ def kick_me(request):
     # return anything to client... Just ensures up-to-date prices. The client is
     # responsible for calling this as frequently as necessary, ideally a second
     # or so before client calls for account data refresh.
-    refreshprices()
-    monitoralerts()   # after updating prices, check if any alerts triggered
+    # refreshprices()
+    # monitoralerts()   # after updating prices, check if any alerts triggered
     return JsonResponse({"message":"completed"}, status = 200)
 
 NEWS_CHECK = 20   # global. Check for stock news this often. (refreshprices() visits)
 newsCheck = 0     # global. Counter. When 0 refreshprices() also refreshes news.
 STORIES_PER_SYMBOL = 5  # Number of news stories we'll get per stock
-
+#
 def refreshprices():
-    # This function refreshes asset prices.
-    # TBD: Need to refine the date/time functionality to precisely choose
-    # last market close date. For now, just using today's PT date - 1.
-
-    """
-    Polygon.io credentials below - to be removed before pushing to Github
-    """
-    key = os.getenv("APCA_API_KEY_ID")
-    global NEWS_CHECK
-    global newsCheck
-    global STORIES_PER_SYMBOL
-    with RESTClient(key) as client:
-
-        assetsall = Asset.objects.all()
-        for a in assetsall:
-            astr = a.assetSymbol.upper()
-            if astr != "CASH":
-                resp = client.stocks_equities_previous_close(astr)
-                prevclose = resp.results[0]['c']
-                resp = client.stocks_equities_last_trade_for_a_symbol(astr)
-                lastprice = resp.last.price
-                print(f"{astr}, status={resp.status} prevclose={prevclose}, lasttrade={lastprice}")
-                if resp.status == 'success':
-                    a.lastPrice = lastprice
-                    a.openingPrice = prevclose
-                    a.lastLook = timezone.now()
-                    a.save()
-                else:
-                    print(f"unable to update {astr}") # failure getting price info
-                if newsCheck <= 0:  # time to check the news!
-                        print("got to news check")
-                        News.objects.filter(symbol=a).delete()  # we just overwrite news
-                        resp = client.reference_ticker_news(astr)
-                        print(f"for {astr} there were {len(resp.news)} items")
-                        if len(resp.news) >= STORIES_PER_SYMBOL:
-                            for i in range(STORIES_PER_SYMBOL):
-                                ntitle = resp.news[i].title
-                                if len(ntitle) > 55:    # need to limit size for scroller
-                                    words = ntitle.split()  # split into [words]
-                                    newstr = ''
-                                    i = 0
-                                    while (len(newstr) < 55):
-                                        newstr = newstr + ' ' + words[i]
-                                        i += 1
-                                    ntitle = newstr[:62] + " ..."
-                                nurl = resp.news[i].url
-                                n = News(symbol=a, headline=ntitle, articleURL=nurl)
-                                n.save()
-
-    if newsCheck <= 0:  # if this was our news cycle, reset counter
-        newsCheck = NEWS_CHECK
-    else:
-        newsCheck -= 1   # else count down
+#     # This function refreshes asset prices.
+#     # TBD: Need to refine the date/time functionality to precisely choose
+#     # last market close date. For now, just using today's PT date - 1.
+#
+#     """
+#     Polygon.io credentials below - to be removed before pushing to Github
+#     """
+#     key = os.getenv("APCA_API_KEY_ID")
+#     global NEWS_CHECK
+#     global newsCheck
+#     global STORIES_PER_SYMBOL
+#     with RESTClient(key) as client:
+#
+#         assetsall = Asset.objects.all()
+#         for a in assetsall:
+#             astr = a.assetSymbol.upper()
+#             if astr != "CASH":
+#                 resp = client.stocks_equities_previous_close(astr)
+#                 prevclose = resp.results[0]['c']
+#                 resp = client.stocks_equities_last_trade_for_a_symbol(astr)
+#                 lastprice = resp.last.price
+#                 print(f"{astr}, status={resp.status} prevclose={prevclose}, lasttrade={lastprice}")
+#                 if resp.status == 'success':
+#                     a.lastPrice = lastprice
+#                     a.openingPrice = prevclose
+#                     a.lastLook = timezone.now()
+#                     a.save()
+#                 else:
+#                     print(f"unable to update {astr}") # failure getting price info
+    #             if newsCheck <= 0:  # time to check the news!
+    #                     print("got to news check")
+    #                     News.objects.filter(symbol=a).delete()  # we just overwrite news
+    #                     resp = client.reference_ticker_news(astr)
+    #                     print(f"for {astr} there were {len(resp.news)} items")
+    #                     if len(resp.news) >= STORIES_PER_SYMBOL:
+    #                         for i in range(STORIES_PER_SYMBOL):
+    #                             ntitle = resp.news[i].title
+    #                             if len(ntitle) > 55:    # need to limit size for scroller
+    #                                 words = ntitle.split()  # split into [words]
+    #                                 newstr = ''
+    #                                 i = 0
+    #                                 while (len(newstr) < 55):
+    #                                     newstr = newstr + ' ' + words[i]
+    #                                     i += 1
+    #                                 ntitle = newstr[:62] + " ..."
+    #                             nurl = resp.news[i].url
+    #                             n = News(symbol=a, headline=ntitle, articleURL=nurl)
+    #                             n.save()
+    #
+    # if newsCheck <= 0:  # if this was our news cycle, reset counter
+    #     newsCheck = NEWS_CHECK
+    # else:
+    #     newsCheck -= 1   # else count down
     return
 
-def monitoralerts():
-    # This function looks to see if any alerts should be triggered
-    alrts = Alert.objects.all()
-    for alrt in alrts:
-        stock = Asset.objects.filter(assetSymbol=alrt.symbol).first()
-        if alrt.movement == 'goes above':   # if there is a go-above alert set
-            if alrt.lastLook <= alrt.threshold:  # if last time we were below threshold
-                if stock.lastPrice > alrt.threshold: # are we now above threshold?
-                    sendAlert(alrt)              # Send alert!
-        elif alrt.movement == 'goes below':  # if there is a go-below alert set:
-            if alrt.lastLook >= alrt.threshold:  # if last time we were above threshold
-                if stock.lastPrice < alrt.threshold: # are we now below threshold?
-                    sendAlert(alrt)              # Send alert!
-        alrt.lastLook = stock.lastPrice     # in any case, update lastLook to current price
-        alrt.save()
-    return
-
-
-#  This func takes alert object and sends out appropriate alert
-def sendAlert(alrt):
-    print('')
-    if alrt.movement == 'goes above':
-        say = "crossed above"
-    elif alrt.movement == 'goes below':
-        say = "crossed below"
-    else:
-        say = alrt.movement
-    txtmsg = f"ALERT: {alrt.symbol} {say} {alrt.threshold} at {datetime.now().strftime('%m/%d %H:%M')}"
-    print(txtmsg)
-    print('')
-    cm = AlertQ(user=alrt.user, alertmessage=txtmsg)
-    cm.save()    # put in queue to go out to client on next get_portfolio
-    if alrt.text_notification:
-        ph = alrt.user.mobile_number
-        print(f"We got to text notif. and the user's phone no. is: {alrt.user.mobile_number}")
-        print(f"the user is: {alrt.user}")
-        print(f"user's phone number is: {alrt.user.mobile_number}")
-        if ph[0:2] != "+1": # if no +1 in front of mobile number add it
-            ph = '+1' + ph
-        if len(ph) == 12:      # only proceed if we have 12 character US phone number
-            client = Client(account_sid, auth_token)
-            message = client.messages \
-                            .create(
-                                 body=txtmsg,
-                                 from_='+16203712944',
-                                 to=ph
-                             )
-            print(message.sid)
-    return
+# def monitoralerts():
+#     # This function looks to see if any alerts should be triggered
+#     alrts = Alert.objects.all()
+#     for alrt in alrts:
+#         stock = Asset.objects.filter(assetSymbol=alrt.symbol).first()
+#         if alrt.movement == 'goes above':   # if there is a go-above alert set
+#             if alrt.lastLook <= alrt.threshold:  # if last time we were below threshold
+#                 if stock.lastPrice > alrt.threshold: # are we now above threshold?
+#                     sendAlert(alrt)              # Send alert!
+#         elif alrt.movement == 'goes below':  # if there is a go-below alert set:
+#             if alrt.lastLook >= alrt.threshold:  # if last time we were above threshold
+#                 if stock.lastPrice < alrt.threshold: # are we now below threshold?
+#                     sendAlert(alrt)              # Send alert!
+#         alrt.lastLook = stock.lastPrice     # in any case, update lastLook to current price
+#         alrt.save()
+#     return
+#
+#
+# #  This func takes alert object and sends out appropriate alert
+# def sendAlert(alrt):
+#     print('')
+#     if alrt.movement == 'goes above':
+#         say = "crossed above"
+#     elif alrt.movement == 'goes below':
+#         say = "crossed below"
+#     else:
+#         say = alrt.movement
+#     txtmsg = f"ALERT: {alrt.symbol} {say} {alrt.threshold} at {datetime.now().strftime('%m/%d %H:%M')}"
+#     print(txtmsg)
+#     print('')
+#     cm = AlertQ(user=alrt.user, alertmessage=txtmsg)
+#     cm.save()    # put in queue to go out to client on next get_portfolio
+#     if alrt.text_notification:
+#         ph = alrt.user.mobile_number
+#         print(f"We got to text notif. and the user's phone no. is: {alrt.user.mobile_number}")
+#         print(f"the user is: {alrt.user}")
+#         print(f"user's phone number is: {alrt.user.mobile_number}")
+#         if ph[0:2] != "+1": # if no +1 in front of mobile number add it
+#             ph = '+1' + ph
+#         if len(ph) == 12:      # only proceed if we have 12 character US phone number
+#             client = Client(account_sid, auth_token)
+#             message = client.messages \
+#                             .create(
+#                                  body=txtmsg,
+#                                  from_='+16203712944',
+#                                  to=ph
+#                              )
+#             print(message.sid)
+#     return
 
 
 def landing(request):
@@ -228,10 +228,9 @@ def get_portfolio(request):
     # Similar to acct_content view, but like we have only one account.
     # Here the data structure is simply an array of row-data arrays. Each row:
     # [sym, price, price_chg, chg_pct, type, quantity, value, pct_of_total]
-    # Last [] should have sym = 'TOTAL' and show price_chg and value for portfolio.
-    # We will need "open_price" info for each asset and use sum of open_price * qty
-    # of each asset as the basis for calculating changes in portolio value.
-    # TBD: Daily task that builds a new db table to keep daily portfolio value.
+    # Last stocks row has sym = 'TOTAL' and show price_chg and value for portfolio.
+    # Then we append news items with symbol $NEWS. Then we append $ALERTS.
+    # Then come $DJI, $GSPC, $IXIC and $MKT rows.  See spec for data structure.
     u = MyUser.objects.filter(pk=request.user.pk).first()  # identify our user
     accts = Account.objects.filter(user=u)
     portfolio = []
@@ -311,13 +310,69 @@ def get_portfolio(request):
     amsgs = AlertQ.objects.filter(user=u)
 
     for amsg in amsgs:
-        alertRow = ['$ALERT', amsg.alertmessage]
+        alertRow = ['$ALERT', amsg.alertID, amsg.alertmessage]
         rowsToAdd.append(alertRow)
     portfolio = portfolio + rowsToAdd
-    AlertQ.objects.filter(user=u).delete()   # delete alerts that were in queue
-    print(portfolio)
+
     # return JsonResponse(portfolio, safe=False)
+
+    # Now work on market index rows.
+    # We rely on db having a set of index data for previous trading day if we haven't
+    # yet started a new trading day, or, if market is now open, having a set of
+    # data points for indices in today's session.  Either way, we rely on the
+    # db table having a set of data points all with same date. So we start with
+    # earliest timestamp and take subsequent points every 30 minutes, for as many
+    # 30-minute samples as we can get.
+
+    i = IndexData.objects.all().order_by('timeStampNY')
+    if len(i) > 0:
+        # for DJ, S&P and NASDAQ, record the previous close and latest values
+        d = ['$DJI', str(i[len(i)-1].prevDJIclose), str(i[len(i)-1].DJIvalue)]    # dji jones row
+        s = ['$GSPC', str(i[len(i)-1].prevGSPCclose), str(i[len(i)-1].GSPCvalue)]   # gspc row
+        n = ['$IXIC', str(i[len(i)-1].prevIXICclose), str(i[len(i)-1].IXICvalue)]    # ixic row
+        # now go through every row of IndexData and pick the :00/:30 minute data points
+        for j in i:
+            if j.timeStampNY.minute % 30 == 0:    # if timestamp is :00 or :30 min
+                d.append(str(j.DJIvalue))
+                s.append(str(j.GSPCvalue))
+                n.append(str(j.IXICvalue))
+    else:
+        print("ERROR in get_portfolio. IndexData appears to be empty. Skipping indices.")
+        d = ['$DJI', 0]
+        s = ['$GSPC', 0]
+        n = ['$IXIC', 0]
+    portfolio.append(d)
+    portfolio.append(s)
+    portfolio.append(n)
+
+    # Onto end of portfolio array, append the market status
+    ms = MktInfo.objects.first()
+    lastrow = ['$MKT', timezone.localtime().strftime('%b %d %Y, %H:%M:%S'), ms.mktStatus]
+    portfolio.append(lastrow)
+
+    print(portfolio)
     return JsonResponse(portfolio, safe=False)
+
+@csrf_exempt
+@login_required
+def delete_alert(request):
+    if request.method == "POST":
+        d = request.body.decode('utf-8')
+        d = json.loads(d)
+        a = AlertQ.objects.filter(alertID=d['alertID']).delete()
+        print(f"del_alert processed request to delete alertID {d['alertID']}. result = {a}")
+        if a[0] == 1:
+            return JsonResponse({
+            "success":"success!"
+            }, status = 200)
+        else:
+            return JsonResponse({
+            "error":"db error trying to delete that alertID"
+            }, status = 400)
+    else:
+        return JsonResponse({
+        "error": "delete_alert route requires POST"
+        }, status = 400)
 
 
 @login_required
