@@ -226,8 +226,12 @@ def index_data():
         if n[0] == 'error':
             print(f"error retrieving info for IXIC")
         print(f"writing index data to db: IXIC current= {n[1]}, previous= {n[2]}")
-        id = IndexData(timeStampNY=t, DJIvalue=d[1], GSPCvalue=s[1], IXICvalue=n[1], prevDJIclose=d[2], prevGSPCclose=s[2], prevIXICclose=n[2])
-        id.save()  # commit to db
+        # Check before writing to db:  Since we are over-sampling, sometimes we'll have timestamp which is same as the
+        # previous item stored. (within same minute)  In this case, skip writing this time around.
+        lastwrite = IndexData.objects.order_by('timeStampNY').last()
+        if lastwrite[0].timeStampNY.minute != t.minute:
+            id = IndexData(timeStampNY=t, DJIvalue=d[1], GSPCvalue=s[1], IXICvalue=n[1], prevDJIclose=d[2], prevGSPCclose=s[2], prevIXICclose=n[2])
+            id.save()  # commit to db
     else:
         print("index_data task: Skipping index updates. Market is not open.")
     return

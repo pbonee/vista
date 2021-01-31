@@ -1,526 +1,17 @@
 // Every time a page is loaded:
 document.addEventListener("DOMContentLoaded", function() {
-  setInterval(getMarket, 10000);  // kick off every 10 sec  update for navbar time.
   if (window.location.pathname == "/dash") {
     console.log("executing script for /dash");
+    localStorage.clear();
     localStorage.setItem('displayAcct', '');  // set flag so next time to accts tab default to first tab
     document.querySelector("#navDash").classList.add("active");
-    // localStorage.clear();
-    localStorage.setItem("newsQi", 0); //initialize news item index
-    newsFrame1(true);  // fill marquee.  true => don't set next newsFrame event timer. Do this
-    newsFrame2(true);  // because we're just starting page and want to initialize scroller content
-    newsFrame3(true);  // but we don't want to start clock for ongoing writes. That must be synced
-    newsFrame4(true);  // to marquee scroll. A separate event will do that later. (newsFrame0)
 
-    // We are painting Dashboard page. First we will do immediate getMarket() so
-    // there is immediate data in upper right hand navbar for time and status.
-    // Then we'll use this time information to determine what data we'll need to
-    // get for the graphs.
-
-    const polykey = document.querySelector('#polykey').innerText;
-    fetch('https://api.polygon.io/v1/marketstatus/now?apiKey=' + polykey)
-    .then((resp) => resp.json())
-    .then(data =>  {
-      let dateStr = data.serverTime.slice(0,10);
-      console.log(`dateStr = ${dateStr}`);
-      let dt = new Date(data.serverTime);
-      dt = new Date(dt.toLocaleString("en-US", {timeZone: "America/New_York"}));
-      dt = dt.toString();
-      let n = dt.indexOf("GMT");
-      dt = dt.slice(4, n-4);
-      dt = dt + " ET";
-      console.log(`initial check of market = ${data.market}`);
-      console.log(`initial check of time = ${dt}`);
-      document.querySelector('#timefield').innerHTML = dt;
-      document.querySelector('#marketfield').innerHTML = data.market;
-      localStorage.setItem("marketStat", data.market);  // remember this
-      let mktIsOpen = (data.market == 'open');
-      let mktIsExtHours = (data.market == 'extended-hours');
-      let mktIsClosed = (data.market == 'closed');
-      let hourInt = dt.slice(12,14);
-      let minInt = dt.slice(15,17);
-      console.log(mktIsOpen, mktIsExtHours, mktIsClosed);
-      console.log(`HH=${hourInt}, MM=${minInt}`);  // hours
-      const fmpkey = document.querySelector('#fmpkey').innerText;
-      let fmpBaseURL = 'https://financialmodelingprep.com/api/v3/historical-chart/';
-      let exchanges = ['%5EDJI', '%5EIXIC', '%5EGSPC'];
-      let apiKey = '?apikey=' + fmpkey;
-      // fmp URL = fmpBaseURL + mins + exchange + apiKey
-      var mins;
-      if ((mktIsOpen) && (parseInt(hourInt) < 10)) {
-        // 9:30 to 10:00.  Use 1-min series.
-        mins = '1min/';
-        console.log("Will use 1-minute bars for charts.")
-      }
-      else {
-        // Any other time, 30-min series is good enough.
-        mins = '30min/';
-        console.log("Will use 30-minute bars for charts.")
-      };
-
-      // Go to FMP and get the market index bars. For 3 indices. One at a time.
-      // Each chart must be done within code block of fetch. (need response data )
-      // Will do Dow Jones index first:
-        let exchange = exchanges[0];
-        fmpurl = fmpBaseURL + mins + exchange + apiKey;
-        console.log(fmpurl);
-        fetch(fmpurl)
-        .then((resp) => resp.json())
-        .then(fmpdata => {
-          // From FMP market index bars, extract data for graphs. Full graph is set up
-          // for 14 points, representing a full set of 30-minute bars in a trading day.
-          // If we're in market hours, need to build a partial set, with less than
-          // 14 points.
-          console.log(fmpdata);
-          let ticks = [];  // build array of tick times, in ascending order (unshift latest ticks in)
-          if (mktIsOpen) {
-            // we'll subtract :30 from time to get tick points. But start with
-            // nearest HH:00 or HH:30.
-            let mm = minInt;
-            let hh = hourInt;
-            if (parseInt(mm) >= 30) {
-              mm = '30';
-            }
-            else {
-              mm = '00';
-            }
-            ticks.unshift(hh + ':' + mm);  // our latest half-hour tick
-            while (!(hh == '09' && mm == '30')) {   // stop after pushing "09:30" into the array
-              // subtract 30 from hhmm and unshift next tick into [ticks]
-              if (mm == '30') {   // if hh:30 then it becomes hh:00
-                mm = '00';
-              }
-              else {         // if hh:00 then it becomes hh:30 with the hh decremented
-                hh = ('0' + (parseInt(hh) - 1)).slice(-2); // decrement hh but keep as hh string
-                mm = '30';
-              }
-              ticks.unshift(hh + ':' + mm);
-            }
-          }
-          else {
-            // build [ticks] for case where market is closed.  easy.
-            ticks = ["09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"];
-          }
-          console.log({ticks});
-          let closeps = [];  // will create array of index close prices for this index
-
-          for (tick of ticks) {
-            let close = searchBars(dateStr, tick, fmpdata, mktIsOpen);
-            closeps.push(close);
-            console.log(`at ${tick} the close price was ${close}`);
-          };
-          if (closeps.length == 1) {
-            let oneMore = fmpdata[0].close;   // this will be the most recent data record
-            closeps.push(oneMore);
-          }
-
-// Above here, no longer need.  Old accesses to polygon and fmp from client .
-// pick up processing of index data:
-
-          // Update the index pricing on page
-          let basis0 = searchYestClose(dateStr, fmpdata);  // closing price from prior trading day
-          if (closeps.length == 0) {
-            let price0 = basis0;  // in case we don't have today's first bar, let price = yesterday's close
-          }
-          else {
-            price0 = closeps[closeps.length-1];
-          };
-          let prcchg0 = price0 - basis0;
-          if (prcchg0 >= 0) {
-            prcchg0 = '+' + prcchg0.toFixed(2);  // convert to string with plus sign
-          }
-          else {
-            prcchg0 = prcchg0.toFixed(2);   // convert to string (will include minus sign)
-          };
-
-          document.querySelector('#dcurrent').innerHTML = price0.toFixed(2);
-          document.querySelector('#dchange').innerHTML = prcchg0;
-          if (prcchg0.slice(0,1) == '+') {
-            document.querySelector('#dchange').style.color = 'green';
-          };
-          if (prcchg0.slice(0,1) == '-') {
-            document.querySelector('#dchange').style.color = 'red';
-          };
-
-          // paint the DJI chart
-          var ctx0 = document.getElementById("dowChart").getContext("2d");
-          const gradient0 = ctx0.createLinearGradient(0, 0, 0, 80);
-          gradient0.addColorStop(0, document.querySelector('#dchange').style.color);
-          gradient0.addColorStop(1, "white");
-          let sugMax = 1.01 * Math.max(...closeps);
-          let sugMin = 0.99 * Math.min(...closeps);
-          var chart0 = new Chart(ctx0, {
-            // The type of chart we want to create
-            type: "line",
-
-            // The data for our dataset
-            data: {
-                labels: ["open", "", "", "", "", "close"],
-        //      labels: ["9:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"],
-              datasets: [
-                {
-                  label: "DJI",
-                  backgroundColor: gradient0,
-                  borderColor: document.querySelector('#dchange').style.color,
-                  pointRadius: 0,
-                  spanGaps: false,
-                  data: closeps
-                }
-              ]
-            },
-            // Configuration options go here
-            options: {
-              scales: {
-                  yAxes: [{
-                      ticks: {
-                          min: sugMax,
-                          max: sugMin
-                      }
-                  }]
-              },
-              legend: { display: false },
-              maintainAspectRatio: false
-            }
-          });
-
-        });   // Inner fetch. This one for FMP data series. First time - DJI chart.
-
-        // Now for the NASDAQ chart:
-        exchange = exchanges[1];
-        fmpurl = fmpBaseURL + mins + exchange + apiKey;
-        console.log(fmpurl);
-        fetch(fmpurl)
-        .then((resp) => resp.json())
-        .then(fmpdata => {
-          // From FMP market index bars, extract data for graphs. Full graph is set up
-          // for 14 points, representing a full set of 30-minute bars in a trading day.
-          // If we're in market hours, need to build a partial set, with less than
-          // 14 points.
-          console.log(fmpdata);
-          let ticks = [];  // build array of tick times, in ascending order (unshift latest ticks in)
-          if (mktIsOpen) {
-            // we'll subtract :30 from time to get tick points. But start with
-            // nearest HH:00 or HH:30.
-            let mm = minInt;
-            let hh = hourInt;
-            if (parseInt(mm) >= 30) {
-              mm = '30';
-            }
-            else {
-              mm = '00';
-            }
-            ticks.unshift(hh + ':' + mm);  // our latest half-hour tick
-            while (!(hh == '09' && mm == '30')) {   // stop after pushing "09:30" into the array
-              // subtract 30 from hhmm and unshift next tick into [ticks]
-              if (mm == '30') {   // if hh:30 then it becomes hh:00
-                mm = '00';
-              }
-              else {         // if hh:00 then it becomes hh:30 with the hh decremented
-                hh = ('0' + (parseInt(hh) - 1)).slice(-2); // decrement hh but keep as hh string
-                mm = '30';
-              }
-              ticks.unshift(hh + ':' + mm);
-            }
-          }
-          else {
-            // build [ticks] for case where market is closed.  easy.
-            ticks = ["09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"];
-          }
-          console.log({ticks});
-          let closeps = [];  // will create array of index close prices for this index
-          for (tick of ticks) {
-            let close = searchBars(dateStr, tick, fmpdata, mktIsOpen);
-            closeps.push(close);
-            console.log(`at ${tick} the close price was ${close}`);
-          };
-          if (closeps.length == 1) {
-            let oneMore = fmpdata[0].close;   // this will be the most recent data record
-            closeps.push(oneMore);
-          }
-          // Update the index pricing on page
-          let basis0 = searchYestClose(dateStr, fmpdata);  // closing price from prior trading day
-          if (closeps.length == 0) {
-            let price0 = basis0;  // in case we don't have today's first bar, let price = yesterday's close
-          }
-          else {
-            price0 = closeps[closeps.length-1];
-          };
-          let prcchg0 = price0 - basis0;
-          if (prcchg0 >= 0) {
-            prcchg0 = '+' + prcchg0.toFixed(2);  // convert to string with plus sign
-          }
-          else {
-            prcchg0 = prcchg0.toFixed(2);   // convert to string (will include minus sign)
-          };
-          document.querySelector('#ncurrent').innerHTML = price0.toFixed(2);
-          document.querySelector('#nchange').innerHTML = prcchg0;
-          if (prcchg0.slice(0,1) == '+') {
-            document.querySelector('#nchange').style.color = 'green';
-          };
-          if (prcchg0.slice(0,1) == '-') {
-            document.querySelector('#nchange').style.color = 'red';
-          };
-          // paint the NASDAQ chart
-          var ctx1 = document.getElementById("nasdaqChart").getContext("2d");
-          const gradient1 = ctx1.createLinearGradient(0, 0, 0, 80);
-          gradient1.addColorStop(0, document.querySelector('#nchange').style.color);
-          gradient1.addColorStop(1, "white");
-          let sugMax = 1.01 * Math.max(...closeps);
-          let sugMin = 0.99 * Math.min(...closeps);
-          var chart1 = new Chart(ctx1, {
-            // The type of chart we want to create
-            type: "line",
-
-            // The data for our dataset
-            data: {
-              labels: ["open", "", "", "", "", "close"],
-              datasets: [
-                {
-                  label: "IXIC",
-                  backgroundColor: gradient1,
-                  borderColor: document.querySelector('#nchange').style.color,
-                  pointRadius: 0,
-                  spanGaps: false,
-                  data: closeps
-                }
-              ]
-            },
-            // Configuration options go here
-            options: {
-              scales: {
-                  yAxes: [{
-                      ticks: {
-                          min: sugMax,
-                          max: sugMin
-                      }
-                  }]
-              },
-              legend: { display: false },
-              maintainAspectRatio: false
-            }
-          });
-        });   // Inner FMP fetch - 2nd time for NASDAQ chart. This one for FMP data series.
-
-
-        // Now for the SP500 chart:
-        exchange = exchanges[2];
-        fmpurl = fmpBaseURL + mins + exchange + apiKey;
-        console.log(fmpurl);
-        fetch(fmpurl)
-        .then((resp) => resp.json())
-        .then(fmpdata => {
-          // From FMP market index bars, extract data for graphs. Full graph is set up
-          // for 14 points, representing a full set of 30-minute bars in a trading day.
-          // If we're in market hours, need to build a partial set, with less than
-          // 14 points.
-          console.log(fmpdata);
-          let ticks = [];  // build array of tick times, in ascending order (unshift latest ticks in)
-          if (mktIsOpen) {
-            // we'll subtract :30 from time to get tick points. But start with
-            // nearest HH:00 or HH:30.
-            let mm = minInt;
-            let hh = hourInt;
-            if (parseInt(mm) >= 30) {
-              mm = '30';
-            }
-            else {
-              mm = '00';
-            }
-            ticks.unshift(hh + ':' + mm);  // our latest half-hour tick
-            while (!(hh == '09' && mm == '30')) {   // stop after pushing "09:30" into the array
-              // subtract 30 from hhmm and unshift next tick into [ticks]
-              if (mm == '30') {   // if hh:30 then it becomes hh:00
-                mm = '00';
-              }
-              else {         // if hh:00 then it becomes hh:30 with the hh decremented
-                hh = ('0' + (parseInt(hh) - 1)).slice(-2); // decrement hh but keep as hh string
-                mm = '30';
-              }
-              ticks.unshift(hh + ':' + mm);
-            }
-          }
-          else {
-            // build [ticks] for case where market is closed.  easy.
-            ticks = ["09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"];
-          }
-          console.log({ticks});
-          let closeps = [];  // will create array of index close prices for this index
-          for (tick of ticks) {
-            let close = searchBars(dateStr, tick, fmpdata, mktIsOpen);
-            closeps.push(close);
-            console.log(`at ${tick} the close price was ${close}`);
-          };
-          if (closeps.length == 1) {
-            let oneMore = fmpdata[0].close;   // this will be the most recent data record
-            closeps.push(oneMore);
-          }
-          // Update the index pricing on page
-          let basis0 = searchYestClose(dateStr, fmpdata);  // closing price from prior trading day
-          if (closeps.length == 0) {
-            let price0 = basis0;  // in case we don't have today's first bar, let price = yesterday's close
-          }
-          else {
-            price0 = closeps[closeps.length-1];
-          };
-          let prcchg0 = price0 - basis0;
-          if (prcchg0 >= 0) {
-            prcchg0 = '+' + prcchg0.toFixed(2);  // convert to string with plus sign
-          }
-          else {
-            prcchg0 = prcchg0.toFixed(2);   // convert to string (will include minus sign)
-          };
-          document.querySelector('#scurrent').innerHTML = price0.toFixed(2);
-          document.querySelector('#schange').innerHTML = prcchg0;
-          if (prcchg0.slice(0,1) == '+') {
-            document.querySelector('#schange').style.color = 'green';
-          };
-          if (prcchg0.slice(0,1) == '-') {
-            document.querySelector('#schange').style.color = 'red';
-          };
-
-          // paint the SP500 chart
-          var ctx2 = document.getElementById("sandpChart").getContext("2d");
-          const gradient2 = ctx2.createLinearGradient(0, 0, 0, 80);
-          gradient2.addColorStop(0, document.querySelector('#schange').style.color);
-          gradient2.addColorStop(1, "white");
-          let sugMax = 1.01 * Math.max(...closeps);
-          let sugMin = 0.99 * Math.min(...closeps);
-          var chart2 = new Chart(ctx2, {
-            // The type of chart we want to create
-            type: "line",
-
-            // The data for our dataset
-            data: {
-              labels: ["open", "", "", "", "", "close"],
-              datasets: [
-                {
-                  label: "S&P",
-                  backgroundColor: gradient2,
-                  borderColor: document.querySelector('#schange').style.color,
-                  pointRadius: 0,
-                  spanGaps: false,
-                  data: closeps
-                }
-              ]
-            },
-            // Configuration options go here
-            options: {
-              scales: {
-                  yAxes: [{
-                      ticks: {
-                          min: sugMax,
-                          max: sugMin
-                      }
-                  }]
-              },
-              legend: { display: false },
-              maintainAspectRatio: false
-            }
-          });
-        });   // Inner FMP fetch - 3rd time for SP500 chart. This one for FMP data series.
-
-    });  // this is 2nd .then from fetch of marketstatus from Polygon (outer of 2 fetches)
-
-    // End of charts code block for top div on Dashboard page.
-    // Now update alerts badge and fill modal body with alerts text if any.
-
-
-
-    // We're painting Dashboard. Next thing to work on is news feed.
-    // Get a batch of news items from Django get_news route. Then feed this into the
-    // scrolling div, which  holds 4 news items. (3 visible between onanimationiteration events).
-
-    let keyDiv0 = document.querySelector("#keydiv0");  // this is msg0 crossing top of marquee
-    keyDiv0.onanimationiteration = newsFrame0;
-
-    function newsFrame0() {
-      console.log("MARK_-1");
-      setTimeout(newsFrame1, 2400);  // Update msg0/msg4 in 1.5 sec.
-    }
-
-    function newsFrame1(oneOff) {  // if oneOff=true, don't setTimeout to run again
-      console.log("MARK_0");        // time now to update msg0/msg4
-      let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
-      let i = localStorage.getItem("newsQi") || 0;  // index
-      if (newsQ.length >= 4) {   // only paint news if sufficient items
-        document.querySelector('#msg0').innerHTML = newsQ[i][0] + ': ' + newsQ[i][1];
-        document.querySelector('#msg4').innerHTML = newsQ[i][0] + ': ' + newsQ[i][1];
-        document.querySelector('#msg0').setAttribute("href", newsQ[i][2]);
-        document.querySelector('#msg0').setAttribute("target", "_blank");
-        document.querySelector('#msg4').setAttribute("href", newsQ[i][2]);
-        document.querySelector('#msg4').setAttribute("target", "_blank");
-
-      }
-      if (!oneOff) {setTimeout(newsFrame2, 2400);};
-    }
-
-    function newsFrame2(oneOff) {
-      console.log("MARK_1");        // time now to update msg1/msg5
-      let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
-      let i = localStorage.getItem("newsQi") || 0;  // index
-      if (newsQ.length >= 4) {   // only paint news if sufficient items
-        document.querySelector('#msg1').innerHTML = newsQ[i*1+1][0] + ': ' + newsQ[i*1+1][1];
-        document.querySelector('#msg5').innerHTML = newsQ[i*1+1][0] + ': ' + newsQ[i*1+1][1];
-        document.querySelector('#msg1').setAttribute("href", newsQ[i*1+1][2]);
-        document.querySelector('#msg1').setAttribute("target", "_blank");
-        document.querySelector('#msg5').setAttribute("href", newsQ[i*1+1][2]);
-        document.querySelector('#msg5').setAttribute("target", "_blank");
-      }
-      if (!oneOff) {setTimeout(newsFrame3, 2400);};
-    }
-
-    function newsFrame3(oneOff) {
-      console.log("MARK_2");        // time now to update msg2/msg6
-      let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
-      let i = localStorage.getItem("newsQi") || 0;  // index
-      if (newsQ.length >= 4) {   // only paint news if sufficient items
-        document.querySelector('#msg2').innerHTML = newsQ[i*1+2][0] + ': ' + newsQ[i*1+2][1];
-        document.querySelector('#msg6').innerHTML = newsQ[i*1+2][0] + ': ' + newsQ[i*1+2][1];
-        document.querySelector('#msg2').setAttribute("href", newsQ[i*1+2][2]);
-        document.querySelector('#msg2').setAttribute("target", "_blank");
-        document.querySelector('#msg6').setAttribute("href", newsQ[i*1+2][2]);
-        document.querySelector('#msg6').setAttribute("target", "_blank");
-      }
-      if (!oneOff) {setTimeout(newsFrame4, 2400);};
-    }
-
-    function newsFrame4() {
-      console.log("MARK_3");        // time now to update msg3/msg7
-      let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
-      let i = localStorage.getItem("newsQi") || 0;  // index
-      if (newsQ.length >= 4) {   // only paint news if sufficient items
-        document.querySelector('#msg3').innerHTML = newsQ[i*1+3][0] + ': ' + newsQ[i*1+3][1];
-        document.querySelector('#msg7').innerHTML = newsQ[i*1+3][0] + ': ' + newsQ[i*1+3][1];
-        document.querySelector('#msg3').setAttribute("href", newsQ[i*1+3][2]);
-        document.querySelector('#msg3').setAttribute("target", "_blank");
-        document.querySelector('#msg7').setAttribute("href", newsQ[i*1+3][2]);
-        document.querySelector('#msg7').setAttribute("target", "_blank");
-      localStorage.setItem("newsQi", ((i*1 + 4) % newsQ.length));
-      }
-    }
-
-
-    // Data fetched from Django get_portfolio route.
-
-    fetch('/get_portfolio')   // This is one of two places where we use this route.
+    // Let's go to /get_portfolio API and get our data:
+    fetch('/get_portfolio')
     .then((resp) => resp.json())
     .then(data => {
-
-      // data is an array of arrays. Includes row arrays for portfolio holdings table.
-      // Appended to array are additional news-items, which are also arrays.
-      // The portfolio row-arrays have an asset symbol as first element.
-      // The news arrays will be marked by "$NEWS" as their first element.
-      // format: ['$NEWS', 'symbol', 'title', 'url']
-      // Server responsible for giving us randomized (not consecutive stories for the
-      // same symbol) news items. We push them into end of [newsQ]. When we take items
-      // from queue for display we will read from front of queue. As we push new items
-      // into the queue we check size of queue and discard old items to keep queue
-      // no larger than 100 items.
-      // Appended to this are alert items, denoted with '$ALERT' as first item.
-
-      // Start with end of array.
-      // Process time and market status.
-      console.log("zeroeth look");
+      // Start with end of array, which is time/market.
+      console.log("executing initial /dash call to get_portfolio:");
       console.log(data.length);
       console.log(data[data.length -1][0], data[data.length -1][1]);
       if (data[data.length - 1][0] == '$MKT') {
@@ -565,7 +56,7 @@ document.addEventListener("DOMContentLoaded", function() {
       // for backward compatibility, we fall through to here if last row is $ALERT row
       let alertQ = [];
       while (data[data.length -1][0] == '$ALERT') {
-        alertItem = data.pop();
+        let alertItem = data.pop();
         alertItem.shift();    // discard the '$ALERT' symbol
         // alertItem.unshift(guidGenerator()); // prepend guid  //INCLUDED IN NEW API 2021.01.23
         alertQ.push(alertItem);  // put news into alertQ
@@ -576,36 +67,363 @@ document.addEventListener("DOMContentLoaded", function() {
       console.log(`Here is the current alert queue:`);
       console.log(alertQ);
       localStorage.setItem("alertQ", JSON.stringify(alertQ));
-      updateAlerts(); // update the alerts badge and modal content - first load of page
+      updateAlerts(); // update the alerts badge and modal content
       // Pop news items from server and store them in browser storage - newsQ.
-      let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
-
+      let newsQ = [];
       while (data[data.length -1][0] == '$NEWS') {
-        newsItem = data.pop();
+        let newsItem = data.pop();
         newsItem.shift();    // discard the '$NEWS' symbol
         newsQ.unshift(newsItem);  // put news into front of the newsQ
       };
       if (newsQ.length > 100) {  // if over 100 news items, discard old ones
         newsQ.splice(100);
       };
-      console.log("got there");
       console.log(`Here is the current news queue:`);
       console.log(newsQ);
       localStorage.setItem("newsQ", JSON.stringify(newsQ));
+
       // Now remaining data are row-arrays for the portfolio table in dashboard.
+      console.log('Here is the latest stocks array:');
+      console.log(data);
+      localStorage.setItem("stocksBuf", JSON.stringify(data));
+
       // To prepare that for building table, prepend a row with column headings.
       const hdrCells = ['symbol', 'price', 'change', '%change', 'type', 'quantity', 'value', '%'];
       data.unshift(hdrCells);
       dashTable = build_table(data);  // this function will build table
       document.querySelector('#table_container').appendChild(dashTable)  // put table in DOM
-      })  // last .then of fetch(/get_portfolio)
 
+      // Initialize the news marquee
+      localStorage.setItem("newsQi", 0); //initialize news item index
+      newsFrame1(true);  // fill marquee.  true => don't set next newsFrame event timer. Do this
+      newsFrame2(true);  // because we're just starting page and want to initialize scroller content
+      newsFrame3(true);  // but we don't want to start clock for ongoing writes. That must be synced
+      newsFrame4(true);  // to marquee scroll. A separate event will do that later. (newsFrame0)
 
+      // Update upper right hand screen time and market status
+      updateTime();
+
+      // Update the DJI price
+      let dj = JSON.parse(localStorage.getItem("DJIBuf"));
+      let djPrev = dj[0];
+      let djLast = dj[1];
+      let djChg = (parseFloat(djLast)-parseFloat(djPrev));
+      // console.log({djChg});
+      document.querySelector('#dcurrent').innerHTML = djLast;
+      if (djChg >= 0) {
+        djChg = djChg.toFixed(2);
+        document.querySelector('#dchange').innerHTML = '+' + djChg;
+        document.querySelector('#dchange').style.color = 'green';
+      };
+      if (djChg < 0) {
+        // console.log("got to line 124");
+        djChg = djChg.toFixed(2);
+        // console.log({djChg});
+        document.querySelector('#dchange').innerHTML = djChg;
+        document.querySelector('#dchange').style.color = 'red';
+      };
+// Need to loop through rest of DJIBuf to get data points
+// for chart. Build 2 arrays:  time stamps (x axis labels) and data points.
+
+      let djData = []; // initialize array of chart y values
+      let djTime = []; // initialize array of chart x values
+      let timeNext = "9:30";  // first x value will be 09:30
+      for(let i = 2; i < dj.length; i++) {    // start at index[2] which should be 09:30 point
+        djData.push(dj[i]);  // build chart data by appending next data point from time series
+        djTime.push(timeNext); // build accompanying chart x value array
+        // advance timeNext by :30
+        if ((timeNext.slice(timeNext.length - 2,timeNext.length)) == "00") {
+          timeNext = timeNext.slice(0, timeNext.length - 2) + "30";   // change MM from 00 to 30
+        }
+        else {
+          timeNext = timeNext.slice(0, timeNext.length - 2) + "00";  // change MM from 30 to 00
+          let hr = timeNext.split(":").shift();         // get the H or HH part
+          let hrInt = parseInt(hr, 10) + 1;   // increment this
+          let hrStr = hrInt.toString();       // and convert back to a string
+          timeNext = hrStr + timeNext.slice(timeNext.length - 3, timeNext.length);  // and replace the HH
+        };
+      }
+      // console.log(`DJI chart y values: ${djData}`);
+      // console.log(`DJI chart x values: ${djTime}`);
+      // paint the DJI chart
+      var ctx0 = document.getElementById("dowChart").getContext("2d");
+      const gradient0 = ctx0.createLinearGradient(0, 0, 0, 80);
+      gradient0.addColorStop(0, document.querySelector('#dchange').style.color);
+      gradient0.addColorStop(1, "white");
+      let sugMax = 1.01 * Math.max(...djData);
+      let sugMin = 0.99 * Math.min(...djData);
+      var chart0 = new Chart(ctx0, {
+        // The type of chart we want to create
+        type: "line",
+
+        // The data for our dataset
+        data: {
+            labels: djTime,
+    //      labels: ["9:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"],
+          datasets: [
+            {
+              label: "DJI",
+              backgroundColor: gradient0,
+              borderColor: document.querySelector('#dchange').style.color,
+              pointRadius: 0,
+              spanGaps: false,
+              data: djData
+            }
+          ]
+        },
+        // Configuration options go here
+        options: {
+          scales: {
+              yAxes: [{
+                  ticks: {
+                      min: sugMax,
+                      max: sugMin
+                  }
+              }]
+          },
+          legend: { display: false },
+          maintainAspectRatio: false
+        }
+      });
+
+      // Update S&P price:
+      let sp = JSON.parse(localStorage.getItem("GSPCBuf"));
+      let spPrev = sp[0];
+      let spLast = sp[1];
+      let spChg = (parseFloat(spLast)-parseFloat(spPrev));
+      document.querySelector('#scurrent').innerHTML = spLast;
+      if (spChg >= 0) {
+        spChg = spChg.toFixed(2);
+        document.querySelector('#schange').innerHTML = '+' + spChg;
+        document.querySelector('#schange').style.color = 'green';
+      };
+      if (spChg < 0) {
+        spChg = spChg.toFixed(2);
+        document.querySelector('#schange').innerHTML = spChg;
+        document.querySelector('#schange').style.color = 'red';
+      };
+
+      // Need to loop through rest of GSPCBuf to get data points
+      // for chart. Build 2 arrays:  time stamps (x axis labels) and data points.
+
+      let spData = []; // initialize array of chart y values
+      let spTime = []; // initialize array of chart x values
+      timeNext = "9:30";  // first x value will be 09:30
+      for(let i = 2; i < sp.length; i++) {    // start at index[2] which should be 09:30 point
+        spData.push(sp[i]);  // build chart data by appending next data point from time series
+        spTime.push(timeNext); // build accompanying chart x value array
+        // advance timeNext by :30
+        if ((timeNext.slice(timeNext.length - 2,timeNext.length)) == "00") {
+          timeNext = timeNext.slice(0, timeNext.length - 2) + "30";   // change MM from 00 to 30
+        }
+        else {
+          timeNext = timeNext.slice(0, timeNext.length - 2) + "00";  // change MM from 30 to 00
+          let hr = timeNext.split(":").shift();         // get the H or HH part
+          let hrInt = parseInt(hr, 10) + 1;   // increment this
+          let hrStr = hrInt.toString();       // and convert back to a string
+          timeNext = hrStr + timeNext.slice(timeNext.length - 3, timeNext.length);  // and replace the HH
+        };
+      }
+      console.log(`S&P chart y values: ${spData}`);
+      console.log(`S&P chart x values: ${spTime}`);
+      // paint the SP500 chart
+      var ctx2 = document.getElementById("sandpChart").getContext("2d");
+      const gradient2 = ctx2.createLinearGradient(0, 0, 0, 80);
+      gradient2.addColorStop(0, document.querySelector('#schange').style.color);
+      gradient2.addColorStop(1, "white");
+      sugMax = 1.01 * Math.max(...spData);
+      sugMin = 0.99 * Math.min(...spData);
+      var chart2 = new Chart(ctx2, {
+        // The type of chart we want to create
+        type: "line",
+
+        // The data for our dataset
+        data: {
+          labels: spTime,
+          datasets: [
+            {
+              label: "S&P",
+              backgroundColor: gradient2,
+              borderColor: document.querySelector('#schange').style.color,
+              pointRadius: 0,
+              spanGaps: false,
+              data: spData
+            }
+          ]
+        },
+        // Configuration options go here
+        options: {
+          scales: {
+              yAxes: [{
+                  ticks: {
+                      min: sugMax,
+                      max: sugMin
+                  }
+              }]
+          },
+          legend: { display: false },
+          maintainAspectRatio: false
+        }
+      });
+
+      // Update NASDAQ prices
+      let nd = JSON.parse(localStorage.getItem("IXICBuf"));
+      let ndPrev = nd[0];
+      let ndLast = nd[1];
+      let ndChg = (parseFloat(ndLast)-parseFloat(ndPrev));
+      document.querySelector('#ncurrent').innerHTML = ndLast;
+      if (ndChg >= 0) {
+        ndChg = ndChg.toFixed(2);
+        document.querySelector('#nchange').innerHTML = '+' + ndChg;
+        document.querySelector('#nchange').style.color = 'green';
+      };
+      if (ndChg < 0) {
+        ndChg = ndChg.toFixed(2);
+        document.querySelector('#nchange').innerHTML = ndChg;
+        document.querySelector('#nchange').style.color = 'red';
+      };
+
+      // Need to loop through rest of IXICBuf to get data points
+      // for chart. Build 2 arrays:  time stamps (x axis labels) and data points.
+
+      let ndData = []; // initialize array of chart y values
+      let ndTime = []; // initialize array of chart x values
+      timeNext = "9:30";  // first x value will be 09:30
+      for(let i = 2; i < nd.length; i++) {    // start at index[2] which should be 09:30 point
+        ndData.push(nd[i]);  // build chart data by appending next data point from time series
+        ndTime.push(timeNext); // build accompanying chart x value array
+        // advance timeNext by :30
+        if ((timeNext.slice(timeNext.length - 2,timeNext.length)) == "00") {
+          timeNext = timeNext.slice(0, timeNext.length - 2) + "30";   // change MM from 00 to 30
+        }
+        else {
+          timeNext = timeNext.slice(0, timeNext.length - 2) + "00";  // change MM from 30 to 00
+          let hr = timeNext.split(":").shift();         // get the H or HH part
+          let hrInt = parseInt(hr, 10) + 1;   // increment this
+          let hrStr = hrInt.toString();       // and convert back to a string
+          timeNext = hrStr + timeNext.slice(timeNext.length - 3, timeNext.length);  // and replace the HH
+        };
+      }
+      console.log(`NASDAQ chart y values: ${ndData}`);
+      console.log(`NASDAQ chart x values: ${ndTime}`);
+      // paint the NASDAQ chart
+      var ctx1 = document.getElementById("nasdaqChart").getContext("2d");
+      const gradient1 = ctx1.createLinearGradient(0, 0, 0, 80);
+      gradient1.addColorStop(0, document.querySelector('#nchange').style.color);
+      gradient1.addColorStop(1, "white");
+      sugMax = 1.01 * Math.max(...ndData);
+      sugMin = 0.99 * Math.min(...ndData);
+      var chart1 = new Chart(ctx1, {
+        // The type of chart we want to create
+        type: "line",
+
+        // The data for our dataset
+        data: {
+          labels: ndTime,
+          datasets: [
+            {
+              label: "IXIC",
+              backgroundColor: gradient1,
+              borderColor: document.querySelector('#nchange').style.color,
+              pointRadius: 0,
+              spanGaps: false,
+              data: ndData
+            }
+          ]
+        },
+        // Configuration options go here
+        options: {
+          scales: {
+              yAxes: [{
+                  ticks: {
+                      min: sugMax,
+                      max: sugMin
+                  }
+              }]
+          },
+          legend: { display: false },
+          maintainAspectRatio: false
+        }
+      });
+
+      // We're painting /dash page.  Next thing to work on is news marquee. Populate the
+      // rolling divs from news stored in the "newsQ" buffer.
+
+      let keyDiv0 = document.querySelector("#keydiv0");  // this is msg0 crossing top of marquee
+      keyDiv0.onanimationiteration = newsFrame0;
+
+      function newsFrame0() {
+        console.log("MARK_-1");
+        setTimeout(newsFrame1.bind(null, false), 2400);  // Update msg0/msg4 in 1.5 sec.
+      }
+
+      function newsFrame1(oneOff) {  // if oneOff=true, don't setTimeout to run again
+        console.log("MARK_0");        // time now to update msg0/msg4
+        let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
+        let i = localStorage.getItem("newsQi") || 0;  // index
+        if (newsQ.length >= 4) {   // only paint news if sufficient items
+          document.querySelector('#msg0').innerHTML = newsQ[i][0] + ': ' + newsQ[i][1];
+          document.querySelector('#msg4').innerHTML = newsQ[i][0] + ': ' + newsQ[i][1];
+          document.querySelector('#msg0').setAttribute("href", newsQ[i][2]);
+          document.querySelector('#msg0').setAttribute("target", "_blank");
+          document.querySelector('#msg4').setAttribute("href", newsQ[i][2]);
+          document.querySelector('#msg4').setAttribute("target", "_blank");
+
+        }
+        if (!oneOff) {setTimeout(newsFrame2.bind(null, false), 2400);};
+      }
+
+      function newsFrame2(oneOff) {
+        console.log("MARK_1");        // time now to update msg1/msg5
+        let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
+        let i = localStorage.getItem("newsQi") || 0;  // index
+        if (newsQ.length >= 4) {   // only paint news if sufficient items
+          document.querySelector('#msg1').innerHTML = newsQ[i*1+1][0] + ': ' + newsQ[i*1+1][1];
+          document.querySelector('#msg5').innerHTML = newsQ[i*1+1][0] + ': ' + newsQ[i*1+1][1];
+          document.querySelector('#msg1').setAttribute("href", newsQ[i*1+1][2]);
+          document.querySelector('#msg1').setAttribute("target", "_blank");
+          document.querySelector('#msg5').setAttribute("href", newsQ[i*1+1][2]);
+          document.querySelector('#msg5').setAttribute("target", "_blank");
+        }
+        if (!oneOff) {setTimeout(newsFrame3.bind(null, false), 2400);};
+      }
+
+      function newsFrame3(oneOff) {
+        console.log("MARK_2");        // time now to update msg2/msg6
+        let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
+        let i = localStorage.getItem("newsQi") || 0;  // index
+        if (newsQ.length >= 4) {   // only paint news if sufficient items
+          document.querySelector('#msg2').innerHTML = newsQ[i*1+2][0] + ': ' + newsQ[i*1+2][1];
+          document.querySelector('#msg6').innerHTML = newsQ[i*1+2][0] + ': ' + newsQ[i*1+2][1];
+          document.querySelector('#msg2').setAttribute("href", newsQ[i*1+2][2]);
+          document.querySelector('#msg2').setAttribute("target", "_blank");
+          document.querySelector('#msg6').setAttribute("href", newsQ[i*1+2][2]);
+          document.querySelector('#msg6').setAttribute("target", "_blank");
+        }
+        if (!oneOff) {setTimeout(newsFrame4, 2400);};
+      }
+
+      function newsFrame4() {
+        console.log("MARK_3");        // time now to update msg3/msg7
+        let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
+        let i = localStorage.getItem("newsQi") || 0;  // index
+        if (newsQ.length >= 4) {   // only paint news if sufficient items
+          document.querySelector('#msg3').innerHTML = newsQ[i*1+3][0] + ': ' + newsQ[i*1+3][1];
+          document.querySelector('#msg7').innerHTML = newsQ[i*1+3][0] + ': ' + newsQ[i*1+3][1];
+          document.querySelector('#msg3').setAttribute("href", newsQ[i*1+3][2]);
+          document.querySelector('#msg3').setAttribute("target", "_blank");
+          document.querySelector('#msg7').setAttribute("href", newsQ[i*1+3][2]);
+          document.querySelector('#msg7').setAttribute("target", "_blank");
+        localStorage.setItem("newsQi", ((i*1 + 4) % (newsQ.length - 4)));
+        }
+      }
+
+    });   // last .then from fetch(/get_portfolio)
   } // end of if dash block
 
   else if (window.location.pathname == "/accounts") {
-    getMarket()   // update upper right time/status, on this new page
     document.querySelector("#navAcct").classList.add("active");
+    updateTime();
     // Accounts page contains a tabbed div where account tables go.
     // For now the column headings are fixed and have following labels:
     const table_headings = ['symbol', 'price', 'change', '%change', 'type', 'quantity', 'value', ''];
@@ -728,13 +546,13 @@ document.addEventListener("DOMContentLoaded", function() {
   }  // if /accounts page
 
   else if (window.location.pathname == "/alerts") {
-    getMarket()   // update upper right time/status, on this new page
     document.querySelector("#navAlerts").classList.add("active");
+    updateTime();
   }
 
   else if (window.location.pathname == "/portfolio") {
     document.querySelector("#navPort").classList.add("active");
-    getMarket()   // update upper right time/status, on this new page
+    updateTime();
 
     accum_cash = document.querySelector("#accum_cash").innerHTML;
     accum_cash = parseFloat(accum_cash);
@@ -841,228 +659,18 @@ document.addEventListener("DOMContentLoaded", function() {
   }  // if /portfolio block end
 
   else if (window.location.pathname == "/settings") {
-    getMarket()   // update upper right time/status, on this new page
     document.querySelector("#navSettings").classList.add("active");
+    updateTime();
 };  // end of if /settings page block
 
-
-
-// This is the 2nd place where we fetch /get_portfolio. This is the periodic fetch
-// so we can dynamically update Dashboard. We get alerts, news, and price data.
-
-  function refreshAcctData() {
-      curPage = window.location.pathname;
-      console.log(`time to refresh.  current page: ${curPage}`);
-      if (curPage == '/dash') {   // on /dash, do periodic refreshes
-        // fetch('/kick_me')
-        // .then((resp) => resp.json())
-        // .then((data) => {
-        //   console.log(`message from /kickme: ${data.message}`);
-          // Now get portfolio updated data and update /dash table
-          fetch('/get_portfolio')
-          .then((resp) => resp.json())
-          .then((data) => {
-            console.log("first look");
-            console.log(data.length);
-            console.log(data[data.length -1][0], data[data.length -1][1]);   // print last row
-            // Start with end of array.
-            // Process time and market status.
-            if (data[data.length - 1][0] == '$MKT') {
-              let mktBufRow = data.pop(); // pop the row off
-              mktBufRow.shift();      // discard the '$MKT' symbol from start of row
-              console.log({mktBufRow});
-              localStorage.setItem('mktBuf', JSON.stringify(mktBufRow));  // store it
-            }
-            else {
-              console.log('ERROR: Did not see expected $MKT row in get_portfolio');
-            };
-            console.log("second look");
-            console.log(data.length);
-            console.log(data[data.length -1][0], data[data.length -1][1]);
-            // Process IXIC data
-            if (data[data.length - 1][0] == '$IXIC') {
-              let IXICBufRow = data.pop(); // pop the row off
-              IXICBufRow.shift();      // discard the '$IXIC' symbol from start of row
-              console.log({IXICBufRow});
-              localStorage.setItem('IXICBuf', JSON.stringify(IXICBufRow));  // store it
-            }
-            else {
-              console.log('ERROR: Did not see expected $IXIC row in get_portfolio');
-            };
-            console.log("third look");
-            console.log(data.length);
-            console.log(data[data.length -1][0], data[data.length -1][1]);
-            // Process GSPC data
-            if (data[data.length - 1][0] == '$GSPC') {
-              let GSPCBufRow = data.pop(); // pop the row off
-              GSPCBufRow.shift();      // discard the '$GSPC' symbol from start of row
-              console.log({GSPCBufRow});
-              localStorage.setItem('GSPCBuf', JSON.stringify(GSPCBufRow));  // store it
-            }
-            else {
-              console.log('ERROR: Did not see expected $GSPC row in get_portfolio');
-            };
-            console.log("fourth look");
-            console.log(data.length);
-            console.log(data[data.length -1][0], data[data.length -1][1]);
-            // Process DJI data
-            if (data[data.length - 1][0] == '$DJI') {
-              let DJIBufRow = data.pop(); // pop the row off
-              DJIBufRow.shift();      // discard the '$DJI' symbol from start of row
-              console.log({DJIBufRow});
-              localStorage.setItem('DJIBuf', JSON.stringify(DJIBufRow));  // store it
-            }
-            else {
-              console.log('ERROR: Did not see expected $DJI row in get_portfolio');
-            };
-            console.log("fifth look");
-            console.log(data.length);
-            console.log(data[data.length -1][0], data[data.length -1][1]);
-            // for backward compatibility, we fall through to here if last row is $ALERT row
-            let alertQ = [];  // 2021.01.23 changes
-            // console.log(`alertQ prev value from localStorage= ${alertQ}`);
-            // console.log(`last array line = ${data[data.length - 1]}`);
-            while (data[data.length -1][0] == '$ALERT') {
-              console.log('line 709 We saw an $ALERT');
-              alertItem = data.pop();
-              alertItem.shift();    // discard the '$ALERT' symbol
-              // alertItem.unshift(guidGenerator()); // prepend guid //INCLUDED IN NEW API 2021.01.23
-              alertQ.push(alertItem);  // put news into alertQ
-            };
-            if (alertQ.length > 5) {  // we'll discard anything over 5 alerts for now
-              alertQ.splice(0, alertQ.length - 5);
-            };
-            console.log(`Here is the current alert queue:`);
-            console.log(alertQ);
-            localStorage.setItem("alertQ", JSON.stringify(alertQ));
-
-            // Pop news items from server and store them in browser storage - newsQ.
-            let newsQ = JSON.parse(localStorage.getItem("newsQ") || "[]");
-
-            while (data[data.length -1][0] == '$NEWS') {
-              newsItem = data.pop();
-              newsItem.shift();    // discard the '$NEWS' symbol
-              newsQ.unshift(newsItem);  // put news into front of the newsQ
-            };
-            if (newsQ.length > 100) {  // if over 100 news items, discard old ones
-              newsQ.splice(100);
-            };
-            console.log(`Here is the current news queue:`);
-            console.log(newsQ);
-            localStorage.setItem("newsQ", JSON.stringify(newsQ));
-
-
-            var portfolio = data;
-            let origLength = portfolio.length;
-            if (portfolio.length > 0) {
-              let iterCount = 0;
-              do {
-              var l = portfolio.length;
-              var i = randIndex(l);
-              var portRow = portfolio[i];
-              setTimeout(oneAtATime, (18000 / origLength) * iterCount, portRow);
-              // evenly space out the updates based on number of assets
-              // We're telling server to update all it's stocks every 30 seconds.
-              // So we'll spread out our updates on client almost this long. (25 secs).
-              // Doing this so user sees some update on screen frequently enough, but
-              // we don't have to update and hit the server too often. The Polygon.io
-              // free service will not allow us to update at a high frequency.
-              function oneAtATime(portRow) {
-                if (portRow[4] == 'growth' || portRow[4] == 'income') {
-                  let tableBody = document.getElementById('table_container').firstChild.nextSibling.lastChild;
-                  let nodes = tableBody.childNodes;
-                  nodes.forEach(node => {
-                    if (node.firstChild.innerHTML == portRow[0]) {   // look for match on symbol, in td[0]. if so:
-                      if (portRow[1] < node.firstChild.nextSibling.innerHTML) {  // if price has gone down
-                        node.firstChild.nextSibling.innerHTML = portRow[1];
-                        node.firstChild.nextSibling.classList.remove('stdbgBlue', 'stdbgRed');
-                        node.firstChild.nextSibling.classList.add('showRed');
-                        setTimeout(function() {
-                          node.firstChild.nextSibling.classList.remove('showRed');
-                          let nextDoor = node.style.backgroundColor;
-                          if (nextDoor == 'rgb(230, 247, 255)') {
-                            node.firstChild.nextSibling.classList.add('stdbgBlue')}
-                          else if (nextDoor == 'rgb(255, 242, 230)') {
-                            node.firstChild.nextSibling.classList.add('stdbgRed');
-                          }
-                        }, 1000);
-                      }
-
-                      else if (portRow[1] > node.firstChild.nextSibling.innerHTML) {  // if price has gone up
-                        node.firstChild.nextSibling.innerHTML = portRow[1];
-                        node.firstChild.nextSibling.classList.remove('stdbgBlue', 'stdbgRed');
-                        node.firstChild.nextSibling.classList.add('showGreen');
-                        setTimeout(function() {
-                          node.firstChild.nextSibling.classList.remove('showGreen');
-                          let nextDoor = node.style.backgroundColor;
-                          if (nextDoor == 'rgb(230, 247, 255)') {
-                            node.firstChild.nextSibling.classList.add('stdbgBlue')}
-                          else if (nextDoor == 'rgb(255, 242, 230)') {
-                            node.firstChild.nextSibling.classList.add('stdbgRed');
-                          }
-                        }, 1000);
-                      }
-                      node.firstChild.nextSibling.nextSibling.innerHTML = portRow[2];  // update price change
-                      if (portRow[2].charAt(0) == '+') {
-                        node.firstChild.nextSibling.nextSibling.style.color = 'green';
-                      };
-                      if (portRow[2].charAt(0) == '-') {
-                        node.firstChild.nextSibling.nextSibling.style.color = 'red';
-                      };
-                      node.firstChild.nextSibling.nextSibling.nextSibling.innerHTML = portRow[3];  // update price change pct
-                      if (portRow[3].charAt(0) == '+') {
-                        node.firstChild.nextSibling.nextSibling.nextSibling.style.color = 'green';
-                      };
-                      if (portRow[3].charAt(0) == '-') {
-                        node.firstChild.nextSibling.nextSibling.nextSibling.style.color = 'red';
-                      };
-
-
-                      node.firstChild.nextSibling.nextSibling.nextSibling.nextSibling.nextSibling.nextSibling.innerHTML = portRow[6];  // value
-                    }
-                  });
-                }    // if we're on the row for Total:
-                else if (portRow[0] == 'TOTAL') {
-                  let tableBody = document.getElementById('table_container').firstChild.nextSibling.lastChild;
-                  let totalNode = tableBody.lastChild;
-                  totalNode.firstChild.nextSibling.nextSibling.nextSibling.nextSibling.nextSibling.nextSibling.innerHTML = portRow[6];
-                }
-              }
-
-              iterCount++;
-              portfolio.splice(i, 1);  // remove asset from list
-            } while (portfolio.length > 0);
-            }  // if (len(portfolio)>0)
-            // Finally let's update the alerts:
-            updateAlerts(); // update the alerts badge and modal content
-          }); // .then of second/nested fetch
-        // }); // .then of first fetch
-        setTimeout(refreshAcctData, 20000);  // while in /dash page, run refreshAcctData every 20 secs.
-
-        // This would be a good place to refresh Market index charts.
-
-
-
-
-      };  // if curPage = /dash block
-  }  // refreshAcctData function block
-
-
-  setTimeout(refreshAcctData, 5000);  // One time upon DOM loaded, set refreshAcctData to run in 5 seconds.
-
+  setInterval(clock_tick,1000);  // Kick off our 1-second timer
 
   // document.querySelector('#exampleModal').on('show.bs.modal', function () {
   //   document.querySelector('#alertsButton').style.border = 'none';
   //   console.log("got modal event");
   // })
 
-
-
-
 })   // DOMContentLoaded
-
-
-
 
 function gotonewaccts() {
   window.location.href = '/add_acct';
@@ -1354,86 +962,6 @@ function randIndex(l) {
   return (Math.floor(Math.random()*l));
 }
 
-// call this function to get market time and status from Polygon, update
-// upper right nav bar info, and get status back. This function returns
-// market status:  'open', 'closed', or 'extended-hours'
-
-function getMarket() {
-  const polykey = document.querySelector('#polykey').innerText;
-  console.log({polykey});
-  fetch('https://api.polygon.io/v1/marketstatus/now?apiKey=' + polykey)
-  .then((resp) => resp.json())
-  .then(data =>  {
-  // console.log(`market ${data.market}`);
-  // console.log(`The time is: ${data.serverTime}`);
-  let dt = new Date(data.serverTime);
-  dt = new Date(dt.toLocaleString("en-US", {timeZone: "America/New_York"}));
-  dt = dt.toString();
-  // console.log(typeof dt);
-  let n = dt.indexOf("GMT");
-  dt = dt.slice(4, n-4);
-  dt = dt + " ET";
-  document.querySelector('#timefield').innerHTML = dt;
-  document.querySelector('#marketfield').innerHTML = data.market; // mkt status
-  prevStatus = localStorage.getItem("marketStat");  // what was last market status?
-  console.log({prevStatus});
-  console.log(data.market);
-  console.log(prevStatus, data.market, prevStatus == data.market);
-  localStorage.setItem("marketStat", data.market); // update with new
-  if (prevStatus != data.market) {
-      console.log("would execute reload of page here");
-      location.reload(true);  // reloading the page will force update of charts, which may not
-  }                         // make sense if market has just opened and charts show prev day.
-
-});
-}
-
-// function to search linearly through FMP bars for matching timestamp and
-// return the close value.  FMP provides an array of approx. 150 records.
-// Each is a JS object with attributes including date (string '2020-11-17 15:52:00')
-// and close (float).  Return null if no match.
-// Note if market not "open" ignore dateStr.  (just look at past day's bars)
-function searchBars(dateStr, hhmmStr, data, mktIsOpen) {
-  for (const record of data) {
-    if (record.date.slice(0, 10) == dateStr || !mktIsOpen) {
-      if (record.date.slice(11, 16) == hhmmStr)  {
-        return record.close;
-      }
-    }
-  };
-  return null;  // could not find match
-}
-
-// function to search linearly through FMP bars for the record just prior to
-// today's first record. That will be closing of the prior trading day. From
-// that record return .close value.  If cannnot get this return null. Since market
-// calendar is not something we know for sure, we do not know prior market day's
-// date. So what we will do is go through records (they are in most recent first)
-// for any record with a 16:00 time. Then if that has today's date, i.e. we're
-// after hours of that day, we will look back for next 16:00 record and that must
-// be prior trading day. But if first match does not have today's date, i.e. we
-// haven't yet gotten today's 16:00 bar, then that first match must be for
-// prior day's closing.
-function searchYestClose(dateStr, data) {
-  for (const record of data) {
-    if ((record.date.slice(11, 13) == '16') && (record.date.slice(14, 16) == '00')) {
-      if (record.date.slice(0,10) != dateStr) {
-        return record.close;
-      }
-    }
-  };
-  return null;  // could not find match
-};
-
-//GUID generator:
-function guidGenerator() {
-    var S4 = function() {
-       return (((1+Math.random())*0x10000)|0).toString(16).substring(1);
-    };
-    console.log("generated guid, line 1199");
-    return ('guid' + (S4()+S4()+"-"+S4()+"-"+S4()+"-"+S4()+"-"+S4()+S4()+S4()));
-};
-
 //refreshes the modal on /dash page with alerts and sets the alerts badge
 function updateAlerts() {
   let alertQ = JSON.parse(localStorage.getItem("alertQ") || "[]");  // get alerts if any
@@ -1457,14 +985,6 @@ function updateAlerts() {
     newClone.style.display = "inline-block"; // set it to display
     let row = alertQ[i];
     newClone.setAttribute("id", row[0]); // set id=UUID
-    // console.log(`newClone= ${newClone}`);
-    // console.log(`newClone classes= ${newClone.classList}`);
-    // console.log(`newClone id= ${newClone.id}`);
-    // console.log(`newClone.firstElementChild= ${newClone.firstElementChild}`);
-    // console.log(`newClone.lastElementChild= ${newClone.lastElementChild}`);
-    // console.log(`newClone.lastElementChild.firstElementChild= ${newClone.lastElementChild.firstElementChild}`);
-    // console.log(`newClone.lastElementChild.firstElementChild.firstElementChild= ${newClone.lastElementChild.firstElementChild.firstElementChild}`);
-
     newClone.lastElementChild.firstElementChild.firstElementChild.setAttribute('id', 'd' + row[0]);  // set ID of input button
     newClone.lastElementChild.firstElementChild.firstElementChild.onclick = deleteAlert;  // may want to move this up to <label>?
     let t = document.createTextNode(row[1]) ; // row[1] is the string sent by server. use it verbatim.
@@ -1521,14 +1041,224 @@ function deleteAlert() {
   return;
 }
 
-// Sleep function. I hate to do this, but FMP returns API key error if
-// we hit it too frequently, so will use this to space out requests by
-// a few milliseconds.
+// New (2021.01.28) function that runs every second. Advances time in upper
+// right of screen. on REFRESH_PERIOD (30 sec?) it calls get_portfolio() which
+// will go to server and get updated data.
+function clock_tick() {
+  console.log("clock_tick()");
+  const REFRESH_PERIOD = 30;
+  let ts = document.querySelector('#timefield').innerHTML;   // get time string
+  let ss = ts.slice(ts.length - 2, ts.length);  // get :SS
+  let new_ss = (parseInt(ss) + 1) % 60;         // add 1 second
+  if ((new_ss % REFRESH_PERIOD) == 0) { // if time to refresh, then call
+    get_portfolio()                     // get_portfolio and it will handle updating time
+  }
+  else {
+    ss = new_ss.toString();   // else make new :SS string and update DOM
+    ss = ss.padStart(2, "0");
+    ts = ts.slice(0, ts.length - 2) + ss;
+    document.querySelector('#timefield').innerHTML = ts;
+  }
+  return;
+}
 
-function sleep(milliseconds) {
-  const date = Date.now();
-  let currentDate = null;
-  do {
-    currentDate = Date.now();
-  } while (currentDate - date < milliseconds);
+// New (2021.01.28) function that gets all up-to-date info from server and
+// stores in localStorage.  Also directly updates upper right-hand time & status.
+// Will then check if we are on /dash page and call refreshAcctData() if so.
+
+function get_portfolio() {
+  curPage = window.location.pathname;
+  console.log(`get_portfolio() has been called. Current page: ${curPage}`);
+  fetch('/get_portfolio')
+  .then((resp) => resp.json())
+  .then(data => {
+    // Start with end of array, which is time/market.
+    console.log("executing get_portfolio(), called from clock_tick()");
+    console.log(data[data.length -1][0], data[data.length -1][1]);
+    if (data[data.length - 1][0] == '$MKT') {
+      let mktBufRow = data.pop(); // pop the row off
+      mktBufRow.shift();      // discard the '$MKT' symbol from start of row
+      console.log({mktBufRow});
+      localStorage.setItem('mktBuf', JSON.stringify(mktBufRow));  // store it
+    }
+    else {
+      console.log('ERROR: Did not see expected $MKT row in get_portfolio()');
+    };
+    // Process IXIC data
+    if (data[data.length - 1][0] == '$IXIC') {
+      let IXICBufRow = data.pop(); // pop the row off
+      IXICBufRow.shift();      // discard the '$IXIC' symbol from start of row
+      console.log({IXICBufRow});
+      localStorage.setItem('IXICBuf', JSON.stringify(IXICBufRow));  // store it
+    }
+    else {
+      console.log('ERROR: Did not see expected $IXIC row in get_portfolio()');
+    };
+    // Process GSPC data
+    if (data[data.length - 1][0] == '$GSPC') {
+      let GSPCBufRow = data.pop(); // pop the row off
+      GSPCBufRow.shift();      // discard the '$GSPC' symbol from start of row
+      console.log({GSPCBufRow});
+      localStorage.setItem('GSPCBuf', JSON.stringify(GSPCBufRow));  // store it
+    }
+    else {
+      console.log('ERROR: Did not see expected $GSPC row in get_portfolio()');
+    };
+    // Process DJI data
+    if (data[data.length - 1][0] == '$DJI') {
+      let DJIBufRow = data.pop(); // pop the row off
+      DJIBufRow.shift();      // discard the '$DJI' symbol from start of row
+      console.log({DJIBufRow});
+      localStorage.setItem('DJIBuf', JSON.stringify(DJIBufRow));  // store it
+    }
+    else {
+      console.log('ERROR: Did not see expected $DJI row in get_portfolio()');
+    };
+    // for backward compatibility, we fall through to here if last row is $ALERT row
+    let alertQ = [];
+    while (data[data.length -1][0] == '$ALERT') {
+      let alertItem = data.pop();
+      alertItem.shift();    // discard the '$ALERT' symbol
+      // alertItem.unshift(guidGenerator()); // prepend guid  //INCLUDED IN NEW API 2021.01.23
+      alertQ.push(alertItem);  // put news into alertQ
+    };
+    if (alertQ.length > 5) {  // we'll discard anything over 5 alerts for now
+      alertQ.splice(0, alertQ.length - 5);
+    };
+    console.log(`Here is the current alert queue:`);
+    console.log(alertQ);
+    localStorage.setItem("alertQ", JSON.stringify(alertQ));
+
+    // Pop news items from server and store them in browser storage - newsQ.
+    let newsQ = [];
+    while (data[data.length -1][0] == '$NEWS') {
+      let newsItem = data.pop();
+      newsItem.shift();    // discard the '$NEWS' symbol
+      newsQ.unshift(newsItem);  // put news into front of the newsQ
+    };
+    if (newsQ.length > 100) {  // if over 100 news items, discard old ones
+      newsQ.splice(100);
+    };
+    console.log(`Here is the current news queue:`);
+    console.log(newsQ);
+    localStorage.setItem("newsQ", JSON.stringify(newsQ));
+
+    // Now remaining data are row-arrays for the portfolio table in dashboard.
+    console.log('Here is the latest stocks array:');
+    console.log(data);
+    localStorage.setItem("stocksBuf", JSON.stringify(data));
+
+    // Update upper right hand screen time and market status
+    updateTime();
+
+    // If we're on /dash, then call refreshAcctData()
+    if (curPage == '/dash') {
+      refreshAcctData();
+    };
+  }); // from last .then after fetch
+  return;
+}
+
+// New (2021.01.28) function that is called if we are on /dash page and it is
+// time to refresh stock prices in the holdings table. Called from get_portfolio,
+// and uses data get_portfolio stored in localStorage.
+function refreshAcctData() {
+  var portfolio = JSON.parse(localStorage.getItem("stocksBuf"));
+  let origLength = portfolio.length;
+  if (portfolio.length > 0) {
+    let iterCount = 0;
+    do {
+      var l = portfolio.length;
+      var i = randIndex(l);
+      var portRow = portfolio[i];
+      setTimeout(oneAtATime, (18000 / origLength) * iterCount, portRow);
+      // evenly space out the updates based on number of assets
+      // We're telling server to update all it's stocks every 30 seconds.
+      // So we'll spread out our updates on client almost this long. (25 secs).
+      // Doing this so user sees some update on screen frequently enough, but
+      // we don't have to update and hit the server too often. The Polygon.io
+      // free service will not allow us to update at a high frequency.
+      function oneAtATime(portRow) {
+        if (portRow[4] == 'growth' || portRow[4] == 'income') {
+          let tableBody = document.getElementById('table_container').firstChild.nextSibling.lastChild;
+          let nodes = tableBody.childNodes;
+          nodes.forEach(node => {
+            if (node.firstChild.innerHTML == portRow[0]) {   // look for match on symbol, in td[0]. if so:
+              if (portRow[1] < node.firstChild.nextSibling.innerHTML) {  // if price has gone down
+                node.firstChild.nextSibling.innerHTML = portRow[1];
+                node.firstChild.nextSibling.classList.remove('stdbgBlue', 'stdbgRed');
+                node.firstChild.nextSibling.classList.add('showRed');
+                setTimeout(function() {
+                  node.firstChild.nextSibling.classList.remove('showRed');
+                  let nextDoor = node.style.backgroundColor;
+                  if (nextDoor == 'rgb(230, 247, 255)') {
+                    node.firstChild.nextSibling.classList.add('stdbgBlue')}
+                  else if (nextDoor == 'rgb(255, 242, 230)') {
+                    node.firstChild.nextSibling.classList.add('stdbgRed');
+                  }
+                }, 1000);
+              }
+
+              else if (portRow[1] > node.firstChild.nextSibling.innerHTML) {  // if price has gone up
+                node.firstChild.nextSibling.innerHTML = portRow[1];
+                node.firstChild.nextSibling.classList.remove('stdbgBlue', 'stdbgRed');
+                node.firstChild.nextSibling.classList.add('showGreen');
+                setTimeout(function() {
+                  node.firstChild.nextSibling.classList.remove('showGreen');
+                  let nextDoor = node.style.backgroundColor;
+                  if (nextDoor == 'rgb(230, 247, 255)') {
+                    node.firstChild.nextSibling.classList.add('stdbgBlue')}
+                  else if (nextDoor == 'rgb(255, 242, 230)') {
+                    node.firstChild.nextSibling.classList.add('stdbgRed');
+                  }
+                }, 1000);
+              }
+              node.firstChild.nextSibling.nextSibling.innerHTML = portRow[2];  // update price change
+              if (portRow[2].charAt(0) == '+') {
+                node.firstChild.nextSibling.nextSibling.style.color = 'green';
+              };
+              if (portRow[2].charAt(0) == '-') {
+                node.firstChild.nextSibling.nextSibling.style.color = 'red';
+              };
+              node.firstChild.nextSibling.nextSibling.nextSibling.innerHTML = portRow[3];  // update price change pct
+              if (portRow[3].charAt(0) == '+') {
+                node.firstChild.nextSibling.nextSibling.nextSibling.style.color = 'green';
+              };
+              if (portRow[3].charAt(0) == '-') {
+                node.firstChild.nextSibling.nextSibling.nextSibling.style.color = 'red';
+              };
+
+
+              node.firstChild.nextSibling.nextSibling.nextSibling.nextSibling.nextSibling.nextSibling.innerHTML = portRow[6];  // value
+            }
+          });
+        }    // if we're on the row for Total:
+        else if (portRow[0] == 'TOTAL') {
+          let tableBody = document.getElementById('table_container').firstChild.nextSibling.lastChild;
+          let totalNode = tableBody.lastChild;
+          totalNode.firstChild.nextSibling.nextSibling.nextSibling.nextSibling.nextSibling.nextSibling.innerHTML = portRow[6];
+        }
+      }
+
+      iterCount++;
+      portfolio.splice(i, 1);  // remove asset from list
+    } while (portfolio.length > 0);
+  }  // if (len(portfolio)>0)
+  // Also update alerts to pick up any new ones that may have come in
+  updateAlerts(); // update the alerts badge and modal content
+  return;
+}
+
+// function we can call to refresh time and market status in upper right of screen
+// Each page should call this when loaded. But only when you are sure that we have
+// initialized mktBuf from server API
+
+function updateTime() {
+  let mkttstat = JSON.parse(localStorage.getItem("mktBuf"));
+  let dt = mkttstat[0];
+  let ms = mkttstat[1];
+  console.log(`mktBuf[0] = time string = ${dt}`);
+  console.log(`mktBuf[1] = mkt status  = ${ms}`);
+  document.querySelector('#timefield').innerHTML = dt;
+  document.querySelector('#marketfield').innerHTML = ms;
 }
